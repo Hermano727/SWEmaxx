@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "swemaxx-727",
+    "swe-maxx-dev": "swemaxx-40479",
+    "swemaxx-dev": "swemaxx-40479"
+  },
+  "targets": {},
+  "etags": {}
+}
