@@ -18,6 +18,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import InterviewNavbar from "./interview-navbar"
 
+import { auth } from "@/lib/firebase/clientApp"
+import { recordInterviewStart, recordInterviewEnd } from "@/lib/firebase/firestore"
+import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
+
+
 interface InterviewScreenProps {
   config: any
   onFinish: (results: any) => void
@@ -41,7 +46,19 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   const [isDragging, setIsDragging] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Firebase auth
+  const [userId, setUserId] = useState<string | null>(null);
+  const [interviewDocId, setInterviewDocId] = useState<string | null>(null);
+  const [loading, setloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
+    // If the parent provided an interviewDocId (from setup), use it so this
+    // component can finish the same interview document.
+    if (config?.interviewDocId) {
+      setInterviewDocId(config.interviewDocId)
+    }
+
     if (!config.timeLimit) return
 
     const interval = setInterval(() => {
@@ -92,6 +109,55 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   }
 
   const handleFinish = () => {
+    // If we have an interview document, mark it finished in Firestore before
+    // calling the UI finish handler.
+    (async () => {
+      if (interviewDocId) {
+        try {
+          await recordInterviewEnd(interviewDocId, {
+            score: 85,
+            summary: "Auto-saved finish",
+          })
+        } catch (e: any) {
+          console.error("Failed to record interview end:", e)
+        }
+      }
+
+      onFinish({
+        rating: "Strong Hire",
+        score: 85,
+        strengths: [
+          "Clearly stated assumptions before coding",
+          "Discussed time/space complexity tradeoffs",
+          "Handled edge cases systematically",
+        ],
+        weaknesses: [
+          "Could have optimized the initial approach earlier",
+          "Missed opportunity to discuss alternative data structures",
+        ],
+        mistakes: [
+          { time: "12:34", severity: "minor", message: "Minor syntax error in loop condition" },
+          { time: "23:15", severity: "major", message: "Didn't verify solution with example before submitting" },
+        ],
+      })
+    })()
+  }
+
+  async function handleEnd() {
+    if (!interviewDocId) {
+      setError("No active interview to end");
+      return;
+    }
+    setloading(true);
+    try {
+      await recordInterviewEnd(interviewDocId, { score: 100 });
+      setInterviewDocId(null);
+    } catch (e: any) {
+      setError(e.message || "Failed to end interview");
+    } finally {
+      setloading(false);
+    }
+
     onFinish({
       rating: "Strong Hire",
       score: 85,
@@ -109,6 +175,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
         { time: "23:15", severity: "major", message: "Didn't verify solution with example before submitting" },
       ],
     })
+
   }
 
   const handleUseHint = () => {
@@ -246,7 +313,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                 )}
               </div>
 
-              <Button onClick={handleFinish} className="bg-[#46a758] hover:bg-[#3d8f4a] text-white">
+              <Button onClick={handleEnd} className="bg-[#46a758] hover:bg-[#3d8f4a] text-white">
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Submit Solution
               </Button>

@@ -1,12 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Building2, Clock, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+import { auth } from "@/lib/firebase/clientApp"
+import { recordInterviewStart, recordInterviewEnd } from "@/lib/firebase/firestore"
+import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
 
 interface InterviewSetupProps {
   onStart: (config: any) => void
@@ -25,8 +29,41 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
   const [difficulty, setDifficulty] = useState("random")
   const [timeLimit, setTimeLimit] = useState(true)
   const [hintsEnabled, setHintsEnabled] = useState(true)
+  // Firebase Auth
+  const [userId, setUserId] = useState<string | null>(null);
+  const [interviewDocId, setInterviewDocId] = useState<string | null>(null);
+  const [loading, setloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleStart = () => {
+  useEffect(() => {
+    const user = auth.currentUser;
+    setUserId(user ? user.uid : null);
+  }, [])
+
+  async function ensureSignedIn() {
+    if (auth.currentUser) return auth.currentUser.uid;
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    return result.user.uid;
+  }
+
+  async function handleStart() {
+    setError(null);
+    setloading(true);
+    let docId: string | null = null;
+    try {
+      const uid = await ensureSignedIn();
+      docId = await recordInterviewStart(uid, null, { origin: "web" });
+      setInterviewDocId(docId);
+    } catch (e: any) {
+      setError(e.message || "Failed to start interview");
+    } finally {
+      setloading(false);
+    }
+
+    // Pass the interviewDocId back to the caller so the running interview can
+    // associate future end/update calls with this document. This keeps
+    // persistence decoupled from the UI config object.
     onStart({
       company: selectedCompany,
       mode: interviewMode,
@@ -34,6 +71,7 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
       difficulty,
       timeLimit,
       hintsEnabled,
+      interviewDocId: docId,
     })
   }
 
