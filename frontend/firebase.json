@@ -1,18 +1,4 @@
 {
-  "firestore": {
-    "database": "(default)",
-    "location": "nam5",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "emulators": {
-  "firestore": { "port": 8080 },
-  "auth": { "port": 9099 },
-  "storage": { "port": 9199 }
-  },
   "hosting": {
     "public": "out",
     "ignore": [
@@ -21,11 +7,7 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "**", "destination": "/index.html" }
     ]
   }
-
 }

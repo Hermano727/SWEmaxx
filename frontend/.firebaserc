@@ -4,6 +4,14 @@
     "swe-maxx-dev": "swemaxx-40479",
     "swemaxx-dev": "swemaxx-40479"
   },
-  "targets": {},
+  "targets": {
+    "swemaxx-40479": {
+      "hosting": {
+        "my-v0-project": [
+          "swemaxx-40479"
+        ]
+      }
+    }
+  },
   "etags": {}
 }
