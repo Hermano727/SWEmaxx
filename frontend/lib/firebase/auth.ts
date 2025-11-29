@@ -4,15 +4,16 @@ import {
   onAuthStateChanged as _onAuthStateChanged,
   onIdTokenChanged as _onIdTokenChanged,
   signOut as firebaseSignOut,
+  type User,
 } from "firebase/auth";
 
 import { auth } from "./clientApp";
 
-export function onAuthStateChanged(cb) {
+export function onAuthStateChanged(cb: (user: User | null) => void) {
   return _onAuthStateChanged(auth, cb);
 }
 
-export function onIdTokenChanged(cb) {
+export function onIdTokenChanged(cb: (user: User | null) => void) {
   return _onIdTokenChanged(auth, cb);
 }
 
