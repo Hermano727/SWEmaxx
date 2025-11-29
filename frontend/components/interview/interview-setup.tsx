@@ -8,9 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-import { auth } from "@/lib/firebase/clientApp"
 import { recordInterviewStart, recordInterviewEnd } from "@/lib/firebase/firestore"
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
+import { signInWithGoogle, onAuthStateChanged } from "@/lib/firebase/auth"
 
 interface InterviewSetupProps {
   onStart: (config: any) => void
@@ -36,15 +35,16 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const user = auth.currentUser;
-    setUserId(user ? user.uid : null);
+    const unsub = onAuthStateChanged((u) => {
+      setUserId(u ? u.uid : null)
+    })
+    return unsub
   }, [])
 
   async function ensureSignedIn() {
-    if (auth.currentUser) return auth.currentUser.uid;
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    return result.user.uid;
+    if (userId) return userId
+    const result = await signInWithGoogle()
+    return result.user.uid
   }
 
   async function handleStart() {

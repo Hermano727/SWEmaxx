@@ -3,12 +3,12 @@
 import "server-only";
 
 import { getFirestore } from "firebase/firestore";
-import { app } from "./app";
+import { getAppServer } from "./app";
 
-// Simple server-side helpers that return Firebase services tied to the
-// initialized `app`. For more advanced server-authenticated operations you
-// would normally use the Admin SDK; here we expose the Firestore instance so
-// server code can perform read/write operations when appropriate.
+// Simple server-side helper that returns a Firestore instance backed by
+// a Firebase App initialized on the server. For privileged server
+// operations consider using the Admin SDK instead.
 export function getServerFirestore() {
-  return getFirestore(app);
+  const app = getAppServer()
+  return getFirestore(app)
 }

@@ -7,7 +7,7 @@ import {
   doc,
 } from "firebase/firestore";
 
-import { db } from "./clientApp";
+import { getDbClient } from "./clientApp";
 
 /**
  * Record when a user starts an interview.
@@ -32,6 +32,7 @@ export async function recordInterviewStart(
         status: "started",
     }
 
+  const db = getDbClient();
   const colRef = collection(db, "interviews");
   const docRef = await addDoc(colRef, payload);
 
@@ -44,6 +45,7 @@ export async function recordInterviewEnd(
 ): Promise<void> {
     if (!docId) throw new Error("recordInterviewEnd requires a docId");
     
+    const db = getDbClient();
     const docRef = doc(db, "interviews", docId);
     await updateDoc(docRef, {
         endedAt: serverTimestamp(),
@@ -55,5 +57,5 @@ export async function recordInterviewEnd(
 
 
 export function getFirestoreInstance() {
-  return getFirestore();
+  return getDbClient();
 }

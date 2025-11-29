@@ -1,10 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import type { User } from "firebase/auth";
-import { auth } from "@/lib/firebase/clientApp";
 import { onAuthStateChanged, signInWithGoogle, signOut as signOutFirebase } from "@/lib/firebase/auth";
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(auth.currentUser ?? null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
