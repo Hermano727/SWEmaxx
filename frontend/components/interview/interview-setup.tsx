@@ -53,7 +53,15 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
     let docId: string | null = null;
     try {
       const uid = await ensureSignedIn();
-      docId = await recordInterviewStart(uid, null, { origin: "web" });
+      const meta = {
+        company: selectedCompany,
+        mode: interviewMode,
+        liveFeedback,
+        difficulty,
+        timeLimit,
+        hintsEnabled,
+      }
+      docId = await recordInterviewStart(uid, meta, "web");
       setInterviewDocId(docId);
     } catch (e: any) {
       setError(e.message || "Failed to start interview");
