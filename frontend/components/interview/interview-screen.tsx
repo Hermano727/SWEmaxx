@@ -130,42 +130,37 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   }
 
   const finalizeInterview = async (reason: "submit" | "timeout") => {
-    setError(null)
-    setloading(true)
-
     let scorecard: InterviewResult | null = null
+    setloading(true)
+    try {
+      const res = await fetch(`/api/interviews/${sessionId}/finish`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          config,
+          code,
+          notes,
+          events: [
+            {
+              sessionId,
+              type: reason === "submit" ? "submit" : "timeout",
+              phase: "wrapUp",
+              timestamp: new Date().toISOString(),
+              payload: { note: reason === "submit" ? "User pressed Submit Solution" : "Timer reached zero" },
+            },
+          ] satisfies InterviewEvent[],
+        }),
+      })
 
-    if (sessionId) {
-      try {
-        const res = await fetch(`/api/interviews/${sessionId}/finish`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            config,
-            code,
-            notes,
-            events: [
-              {
-                sessionId,
-                type: reason === "submit" ? "submit" : "timeout",
-                phase: "wrapUp",
-                timestamp: new Date().toISOString(),
-                payload: { note: reason === "submit" ? "User pressed Submit Solution" : "Timer reached zero" },
-              },
-            ] satisfies InterviewEvent[],
-          }),
-        })
-
-        if (res.ok) {
-          const data = await res.json()
-          scorecard = data.scorecard as InterviewResult
-        }
-      } catch (e: any) {
-        console.error("Failed to generate interview scorecard", e)
-        setError(e.message || "Failed to generate interview feedback")
+      if (res.ok) {
+        const data = await res.json()
+        scorecard = data.scorecard as InterviewResult
       }
+    } catch (e: any) {
+      console.error("Failed to generate interview scorecard", e)
+      setError(e.message || "Failed to generate interview feedback")
     }
 
     if (!scorecard) {
@@ -248,7 +243,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
         <div className="w-full bg-[#1a1d23] border-b border-[#30363d] flex justify-center py-2">
           <button
             onClick={() => setNavbarVisible(true)}
-            className="bg-[#0d1117] border border-[#30363d] rounded px-4 py-1.5 text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+            className="rounded-md px-4 py-2 text-sm text-[#8b949e] hover:text-white hover:bg-[#22262e] transition-colors flex items-center gap-2"
           >
             <ChevronDown className="h-4 w-4" />
             Show Timer
@@ -261,108 +256,114 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
           className="flex flex-col border-r border-[#30363d]"
           style={{ width: rightPanelCollapsed ? "100%" : `${leftPanelWidth}%` }}
         >
-          <div className={`${problemCollapsed ? "h-12" : "h-[40%]"} border-b border-[#30363d] transition-all`}>
-            <div className="h-full flex flex-col">
-              <button
-                onClick={() => setProblemCollapsed(!problemCollapsed)}
-                className="flex items-center justify-between px-6 py-3 bg-[#1a1d23] border-b border-[#30363d] text-white hover:bg-[#22262e]"
-              >
-                <span className="font-semibold">Problem: Two Sum</span>
-                {problemCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </button>
+          <div className={`${problemCollapsed ? "h-12" : "min-h-[36%] max-h-[40%]"} border-b border-[#30363d] transition-all duration-200 flex flex-col`}>
+            <button
+              onClick={() => setProblemCollapsed(!problemCollapsed)}
+              className="flex items-center justify-between px-4 py-3 bg-[#1a1d23] border-b border-[#30363d] text-left text-white hover:bg-[#22262e] active:bg-[#242830] transition-colors rounded-none"
+              aria-expanded={!problemCollapsed}
+            >
+              <span className="text-sm font-semibold tracking-tight">Problem: Two Sum</span>
+              {problemCollapsed ? <ChevronDown className="h-4 w-4 shrink-0 text-[#8b949e]" /> : <ChevronUp className="h-4 w-4 shrink-0 text-[#8b949e]" />}
+            </button>
 
-              {!problemCollapsed && (
-                <div className="flex-1 overflow-y-auto p-6 bg-[#0d1117]">
-                  <div className="text-gray-300 space-y-4 leading-relaxed">
-                    <p>
-                      Given an array of integers <code className="bg-[#30363d] px-2 py-1 rounded">nums</code> and an
-                      integer <code className="bg-[#30363d] px-2 py-1 rounded">target</code>, return indices of the two
-                      numbers such that they add up to target.
-                    </p>
+            {!problemCollapsed && (
+              <div className="flex-1 overflow-y-auto p-4 bg-[#0d1117] min-h-0">
+                <div className="text-[#c9d1d9] space-y-4 text-sm leading-relaxed">
+                  <p>
+                    Given an array of integers <code className="bg-[#21262d] px-1.5 py-0.5 rounded text-[#79c0ff] font-mono text-[13px]">nums</code> and an
+                    integer <code className="bg-[#21262d] px-1.5 py-0.5 rounded text-[#79c0ff] font-mono text-[13px]">target</code>, return indices of the two
+                    numbers such that they add up to target.
+                  </p>
 
-                    <div>
-                      <p className="font-semibold text-white mb-2">Example:</p>
-                      <div className="bg-[#1a1d23] p-4 rounded border border-[#30363d] font-mono text-sm">
-                        <div>Input: nums = [2,7,11,15], target = 9</div>
-                        <div>Output: [0,1]</div>
-                        <div className="text-gray-500 mt-2">Explanation: nums[0] + nums[1] = 2 + 7 = 9</div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="font-semibold text-white mb-2">Constraints:</p>
-                      <ul className="list-disc list-inside space-y-1 text-gray-400">
-                        <li>2 ≤ nums.length ≤ 10⁴</li>
-                        <li>-10⁹ ≤ nums[i] ≤ 10⁹</li>
-                        <li>Only one valid answer exists</li>
-                      </ul>
+                  <div>
+                    <p className="font-medium text-white text-[13px] mb-2">Example</p>
+                    <div className="bg-[#1a1d23] p-4 rounded-md border border-[#30363d] font-mono text-[13px] text-[#c9d1d9]">
+                      <div>Input: nums = [2,7,11,15], target = 9</div>
+                      <div>Output: [0,1]</div>
+                      <div className="text-[#8b949e] mt-2">Explanation: nums[0] + nums[1] = 2 + 7 = 9</div>
                     </div>
                   </div>
+
+                  <div>
+                    <p className="font-medium text-white text-[13px] mb-2">Constraints</p>
+                    <ul className="list-disc list-inside space-y-1 text-[#8b949e] text-[13px]">
+                      <li>2 ≤ nums.length ≤ 10⁴</li>
+                      <li>-10⁹ ≤ nums[i] ≤ 10⁹</li>
+                      <li>Only one valid answer exists</li>
+                    </ul>
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          <div className="flex-1 flex flex-col bg-[#0d1117]">
-            <div className="flex items-center justify-between px-6 py-3 bg-[#1a1d23] border-b border-[#30363d]">
-              <span className="text-white font-semibold">Code Editor</span>
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger className="w-[180px] bg-[#0d1117] border-[#30363d] text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a1d23] border-[#30363d]">
-                  <SelectItem value="javascript">JavaScript</SelectItem>
-                  <SelectItem value="python">Python</SelectItem>
-                  <SelectItem value="java">Java</SelectItem>
-                  <SelectItem value="cpp">C++</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between px-4 py-3 bg-[#1a1d23] border-b border-[#30363d]">
+                <span className="text-sm font-semibold text-white tracking-tight">Code Editor</span>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger className="w-[132px] h-8 border-[#30363d] bg-[#0d1117] text-[#c9d1d9] text-sm hover:bg-[#21262d]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="javascript">JavaScript</SelectItem>
+                    <SelectItem value="python">Python</SelectItem>
+                    <SelectItem value="java">Java</SelectItem>
+                    <SelectItem value="cpp">C++</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="flex-1 p-6">
-              <Textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full h-full bg-[#1a1d23] border-[#30363d] text-white font-mono resize-none"
-                placeholder="Write your code here..."
-              />
-            </div>
+              <div className="flex-1 p-4 min-h-0">
+                <Textarea
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="w-full h-full bg-[#1a1d23] border border-[#30363d] text-[#c9d1d9] font-mono text-sm resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#0d1117] placeholder:text-[#6e7681]"
+                  placeholder="Write your code here..."
+                />
+              </div>
 
-            <div className="flex items-center justify-between px-6 py-4 bg-[#1a1d23] border-t border-[#30363d]">
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="border-[#30363d] bg-transparent">
-                  <Play className="mr-2 h-4 w-4" />
-                  Run Code
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCode(`function twoSum(nums, target) {\n  // Your code here\n}`)}
-                  className="border-[#30363d]"
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Reset
-                </Button>
-                {config.hintsEnabled && (
+              <div className="flex items-center justify-between gap-4 px-4 py-3 bg-[#1a1d23] border-t border-[#30363d]">
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleUseHint}
-                    disabled={hintsUsed >= 3}
-                    className="border-[#30363d]"
+                    className="h-8 border-[#30363d] bg-transparent text-[#c9d1d9] hover:bg-[#22262e] hover:text-white hover:border-[#3b3f4d]"
                   >
-                    <Lightbulb className="mr-2 h-4 w-4" />
-                    Hint ({3 - hintsUsed} left)
+                    <Play className="mr-2 h-3.5 w-3.5" />
+                    Run Code
                   </Button>
-                )}
-              </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCode(`function twoSum(nums, target) {\n  // Your code here\n}`)}
+                    className="h-8 border-[#30363d] text-[#c9d1d9] hover:bg-[#22262e] hover:text-white hover:border-[#3b3f4d]"
+                  >
+                    <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                    Reset
+                  </Button>
+                  {config.hintsEnabled && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleUseHint}
+                      disabled={hintsUsed >= 3}
+                      className="h-8 border-[#30363d] text-[#c9d1d9] hover:bg-[#22262e] hover:text-white hover:border-[#3b3f4d] disabled:opacity-50"
+                    >
+                      <Lightbulb className="mr-2 h-3.5 w-3.5" />
+                      Hint ({3 - hintsUsed} left)
+                    </Button>
+                  )}
+                </div>
 
-              <Button onClick={handleEnd} className="bg-[#46a758] hover:bg-[#3d8f4a] text-white">
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Submit Solution
-              </Button>
+                <Button
+                  onClick={handleEnd}
+                  className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white font-medium text-sm"
+                >
+                  <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
+                  Submit Solution
+                </Button>
+              </div>
             </div>
-          </div>
         </div>
 
         {!rightPanelCollapsed && (
@@ -387,44 +388,33 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
             </button>
           ) : (
             <>
-              <div className="h-24 bg-[#1a1d23] border-b border-[#30363d] flex items-center gap-4 px-6 relative">
+              <div className="flex items-center justify-between px-4 py-3 bg-[#1a1d23] border-b border-[#30363d]">
+                <div>
+                  <h2 className="text-sm font-semibold text-white tracking-tight">Scratchpad</h2>
+                  <p className="text-xs text-[#8b949e] mt-0.5">Your notes (not graded)</p>
+                </div>
                 <button
                   onClick={() => setRightPanelCollapsed(true)}
-                  className="absolute top-3 right-3 bg-[#0d1117] border border-[#30363d] rounded p-1 text-gray-400 hover:text-white transition-colors"
+                  className="rounded-md p-2 text-[#8b949e] hover:text-white hover:bg-[#22262e] transition-colors"
                   title="Collapse panel"
+                  aria-label="Collapse notes panel"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
-
-                <div className="w-12 h-12 rounded-full bg-[#30363d] flex items-center justify-center">
-                  <span className="text-2xl">👤</span>
-                </div>
-                <div>
-                  <div className="text-white font-semibold">AI Interviewer</div>
-                  <div className="text-sm text-gray-400 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    Observing...
-                  </div>
-                </div>
               </div>
 
-              <div className="flex-1 flex flex-col bg-[#0d1117]">
-                <div className="px-6 py-3 bg-[#1a1d23] border-b border-[#30363d]">
-                  <span className="text-white font-semibold">Scratchpad</span>
-                  <p className="text-xs text-gray-400 mt-1">Your notes (not graded)</p>
-                </div>
-
-                <div className="flex-1 p-6">
+              <div className="flex-1 flex flex-col min-h-0 bg-[#0d1117]">
+                <div className="flex-1 p-4 min-h-0">
                   <Textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full h-full bg-[#1a1d23] border-[#30363d] text-white resize-none"
+                    className="w-full h-full bg-[#1a1d23] border border-[#30363d] text-white resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#0d1117] placeholder:text-[#6e7681]"
                     placeholder="Write your thoughts, draw diagrams, plan your approach..."
                   />
                 </div>
 
-                <div className="px-6 py-3 bg-[#1a1d23] border-t border-[#30363d] text-xs text-gray-500">
-                  Auto-saved • Last updated just now
+                <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] text-xs text-[#6e7681]">
+                  Auto-saved · Last updated just now
                 </div>
               </div>
             </>
@@ -433,22 +423,26 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
       </div>
 
       {showExitConfirm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="bg-[#1a1d23] border-[#30363d] max-w-md">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="bg-[#1a1d23] border border-[#30363d] max-w-md rounded-lg shadow-xl">
             <CardContent className="p-6">
               <div className="flex items-start gap-4 mb-6">
-                <AlertCircle className="h-6 w-6 text-yellow-500 mt-1" />
+                <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Exit Interview?</h3>
-                  <p className="text-gray-400">Your progress will not be saved. Are you sure you want to exit?</p>
+                  <h3 className="text-base font-semibold text-white mb-1">Exit interview?</h3>
+                  <p className="text-sm text-[#8b949e]">Your progress will not be saved.</p>
                 </div>
               </div>
 
               <div className="flex gap-3 justify-end">
-                <Button variant="outline" onClick={() => setShowExitConfirm(false)} className="border-[#30363d]">
-                  Continue Interview
+                <Button
+                  variant="outline"
+                  onClick={() => setShowExitConfirm(false)}
+                  className="border-[#30363d] text-[#c9d1d9] hover:bg-[#22262e] hover:text-white"
+                >
+                  Continue
                 </Button>
-                <Button onClick={onExit} variant="destructive">
+                <Button onClick={onExit} variant="destructive" className="text-sm">
                   Exit
                 </Button>
               </div>
