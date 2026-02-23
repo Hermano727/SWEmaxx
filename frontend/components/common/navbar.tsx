@@ -33,7 +33,7 @@ export function Navbar() {
             <Link href="/store" className="text-[#f0f0f0] hover:text-[#46a758] transition-colors">
               Store
             </Link>
-            <Link href="/process" className="text-[#3b82f6] hover:text-[#60a5fa] transition-colors">
+            <Link href="/process" className="text-[#14b8a6] hover:text-[#2dd4bf] transition-colors">
               !process
             </Link>
           </div>
@@ -104,7 +104,7 @@ export function Navbar() {
             <Link href="/store" className="text-[#f0f0f0] text-sm">
               Store
             </Link>
-            <Link href="/process" className="text-[#3b82f6] text-sm">
+            <Link href="/process" className="text-[#14b8a6] text-sm">
               !process
             </Link>
             {user ? (

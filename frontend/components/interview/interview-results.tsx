@@ -5,8 +5,24 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle2, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Home } from "lucide-react"
 
+type Mistake = {
+  time: string
+  severity: "minor" | "major" | "critical"
+  message: string
+}
+
+export type InterviewResult = {
+  id?: string
+  company?: string
+  rating: "Strong Hire" | "Hire" | "No Hire"
+  score: number
+  strengths: string[]
+  weaknesses: string[]
+  mistakes: Mistake[]
+}
+
 interface InterviewResultsProps {
-  results: any
+  results: InterviewResult
   onRetry: () => void
   onReturnHome: () => void
 }
@@ -15,17 +31,20 @@ export default function InterviewResults({ results, onRetry, onReturnHome }: Int
   const [mistakesExpanded, setMistakesExpanded] = useState(false)
   const [transcriptExpanded, setTranscriptExpanded] = useState(false)
 
-  const getRatingColor = (rating: string) => {
-    if (rating === "Strong Hire") return "text-green-500"
-    if (rating === "Hire") return "text-yellow-500"
-    return "text-red-500"
+  const getRatingColor = (rating: InterviewResult["rating"]) => {
+    if (rating === "Strong Hire") return "text-[#46a758]"
+    if (rating === "Hire") return "text-[#fbbf24]"
+    return "text-[#f97373]"
   }
 
-  const getSeverityColor = (severity: string) => {
-    if (severity === "critical") return "text-red-500"
-    if (severity === "major") return "text-yellow-500"
-    return "text-green-500"
+  const getSeverityColor = (severity: Mistake["severity"]) => {
+    if (severity === "critical") return "text-[#f97373]"
+    if (severity === "major") return "text-[#fbbf24]"
+    return "text-[#46a758]"
   }
+
+  const companyName = results.company ?? "Google"
+  const companyInitial = companyName.charAt(0).toUpperCase()
 
   return (
     <div className="min-h-screen bg-[#0d1117] pt-24 pb-16 px-4">
@@ -35,9 +54,9 @@ export default function InterviewResults({ results, onRetry, onReturnHome }: Int
           <h1 className={`text-5xl font-bold mb-4 ${getRatingColor(results.rating)}`}>{results.rating}</h1>
           <div className="flex items-center justify-center gap-3 mb-2">
             <div className="w-12 h-12 rounded-lg bg-[#30363d] flex items-center justify-center text-white font-bold">
-              G
+              {companyInitial}
             </div>
-            <span className="text-gray-400">Google Interview</span>
+            <span className="text-gray-400">{companyName} Interview</span>
           </div>
           <div className="text-4xl font-bold text-white">{results.score}/100</div>
         </div>

@@ -45,7 +45,7 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
     typeof meta.mode === "string"
 
   return (
-    <Card className="bg-[#1E2127] border-[#30363D] hover:border-[#00FF41] transition-all">
+    <Card className="bg-[#242830] border-[#3b3f4d] hover:border-[#46a758]/60 transition-all">
       <CardContent className="pt-6">
         {isValidMeta ? (
           <>
@@ -55,24 +55,28 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
 
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-xl font-bold text-[#00FF41]">{String(meta.company).replace(/\b\w/g, c => c.toUpperCase())}</h3>
-                    <span className="text-[#8B949E]">•</span>
-                    <span className="text-[#8B949E]">{displayDate}</span>
+                    <h3 className="text-xl font-bold text-white">
+                      {String(meta.company).replace(/\b\w/g, c => c.toUpperCase())}
+                    </h3>
+                    <span className="text-[#9ca3af]">•</span>
+                    <span className="text-[#9ca3af]">{displayDate}</span>
                   </div>
 
-                  <div className="text-sm text-[#8B949E]">Started at: {displayDate}</div>
+                  <div className="text-sm text-[#9ca3af]">Started at: {displayDate}</div>
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-sm text-[#8B949E]">Runtime</div>
-                  <div className="text-[#FFB86C] font-bold">{item.runtime ?? "—"}</div>
+                  <div className="text-sm text-[#9ca3af]">Runtime</div>
+                  <div className="text-[#fbbf24] font-bold">{item.runtime ?? "—"}</div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-sm text-[#8B949E]">Score</div>
-                  <div className="text-[#00FF41] font-bold">{typeof item.score !== 'undefined' ? `${item.score}%` : "—"}</div>
+                  <div className="text-sm text-[#9ca3af]">Score</div>
+                  <div className="text-[#46a758] font-bold">
+                    {typeof item.score !== "undefined" ? `${item.score}%` : "—"}
+                  </div>
                 </div>
 
                 <button
@@ -81,18 +85,20 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
                   className="flex items-center justify-center p-2 rounded hover:bg-white/2 transition-colors"
                   title={open ? "Collapse details" : "Show details"}
                 >
-                  <ChevronDown className={`h-4 w-4 text-[#8B949E] transition-transform duration-200 ${open ? 'rotate-180' : 'rotate-0'}`} />
+                  <ChevronDown
+                    className={`h-4 w-4 text-[#9ca3af] transition-transform duration-200 ${
+                      open ? "rotate-180" : "rotate-0"
+                    }`}
+                  />
                 </button>
 
                 <div className="flex items-center gap-2">
                   {isPositive ? (
-                    <CheckCircle2 className="h-6 w-6 text-[#00FF41]" />
+                    <CheckCircle2 className="h-6 w-6 text-[#46a758]" />
                   ) : (
-                    <XCircle className="h-6 w-6 text-[#EC4899]" />
+                    <XCircle className="h-6 w-6 text-[#e5484d]" />
                   )}
-                  <span className={isPositive ? "text-[#00FF41]" : "text-[#EC4899]"}>
-                    {resultText || "Pending"}
-                  </span>
+                  <span className={isPositive ? "text-[#46a758]" : "text-[#e5484d]"}>{resultText || "Pending"}</span>
                 </div>
               </div>
             </div>
@@ -102,7 +108,7 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
             </div>
           </>
         ) : (
-          <div className="text-[#8B949E]">Invalid Interview</div>
+          <div className="text-[#9ca3af]">Invalid interview record</div>
         )}
       </CardContent>
     </Card>

@@ -4,7 +4,7 @@ import { useState } from "react"
 import OnboardingModal from "@/components/interview/onboarding-modal"
 import InterviewSetup from "@/components/interview/interview-setup"
 import InterviewScreen from "@/components/interview/interview-screen"
-import InterviewResults from "@/components/interview/interview-results"
+import InterviewResults, { type InterviewResult } from "@/components/interview/interview-results"
 import { Navbar } from "@/components/common/navbar"
 
 type FlowState = "onboarding" | "setup" | "interview" | "results"
@@ -13,14 +13,14 @@ export default function InterviewPage() {
   const [flowState, setFlowState] = useState<FlowState>("setup")
   const [showOnboarding, setShowOnboarding] = useState(false) // Set to true for first-time users
   const [interviewConfig, setInterviewConfig] = useState<any>(null)
-  const [interviewResults, setInterviewResults] = useState<any>(null)
+  const [interviewResults, setInterviewResults] = useState<InterviewResult | null>(null)
 
   const handleStartInterview = (config: any) => {
     setInterviewConfig(config)
     setFlowState("interview")
   }
 
-  const handleFinishInterview = (results: any) => {
+  const handleFinishInterview = (results: InterviewResult) => {
     setInterviewResults(results)
     setFlowState("results")
   }

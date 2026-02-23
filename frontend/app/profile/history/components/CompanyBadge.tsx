@@ -14,7 +14,7 @@ export default function CompanyBadge({ company, size = 48 }: Props) {
   return (
     <div
       style={{ width: size, height: size }}
-      className="rounded-full bg-[#0B1220] flex items-center justify-center border border-[#30363D] text-xl font-bold text-[#00FF41]"
+      className="rounded-full bg-[#1a1d23] flex items-center justify-center border border-[#3b3f4d] text-xl font-bold text-[#46a758]"
     >
       {initial}
     </div>

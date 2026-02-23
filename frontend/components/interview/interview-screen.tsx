@@ -18,10 +18,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import InterviewNavbar from "./interview-navbar"
 
-import { auth } from "@/lib/firebase/clientApp"
-import { recordInterviewStart, recordInterviewEnd } from "@/lib/firebase/firestore"
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
-
+import { recordInterviewEnd } from "@/lib/firebase/firestore"
+import type { InterviewResult, InterviewEvent } from "@/lib/interview/types"
 
 interface InterviewScreenProps {
   config: any
@@ -32,7 +30,6 @@ interface InterviewScreenProps {
 export default function InterviewScreen({ config, onFinish, onExit }: InterviewScreenProps) {
   const [timeRemaining, setTimeRemaining] = useState(45 * 60)
   const [code, setCode] = useState(`function twoSum(nums, target) {
-  // Your code here
 }`)
   const [notes, setNotes] = useState("")
   const [problemCollapsed, setProblemCollapsed] = useState(false)
@@ -108,74 +105,121 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  const handleFinish = () => {
-    // If we have an interview document, mark it finished in Firestore before
-    // calling the UI finish handler.
-    (async () => {
-      if (interviewDocId) {
-        try {
-          await recordInterviewEnd(interviewDocId, {
-            score: 85,
-            summary: "Auto-saved finish",
-          })
-        } catch (e: any) {
-          console.error("Failed to record interview end:", e)
-        }
-      }
+  const sessionId: string | undefined = config?.sessionId ?? interviewDocId ?? undefined
 
-      onFinish({
-        rating: "Strong Hire",
-        score: 85,
-        strengths: [
-          "Clearly stated assumptions before coding",
-          "Discussed time/space complexity tradeoffs",
-          "Handled edge cases systematically",
-        ],
-        weaknesses: [
-          "Could have optimized the initial approach earlier",
-          "Missed opportunity to discuss alternative data structures",
-        ],
-        mistakes: [
-          { time: "12:34", severity: "minor", message: "Minor syntax error in loop condition" },
-          { time: "23:15", severity: "major", message: "Didn't verify solution with example before submitting" },
-        ],
+  const sendEvent = async (event: Omit<InterviewEvent, "sessionId">) => {
+    if (!sessionId) return
+    try {
+      await fetch(`/api/interviews/${sessionId}/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          events: [
+            {
+              sessionId,
+              ...event,
+            },
+          ],
+        }),
       })
+    } catch (e) {
+      console.error("Failed to send interview event", e)
+    }
+  }
+
+  const finalizeInterview = async (reason: "submit" | "timeout") => {
+    setError(null)
+    setloading(true)
+
+    let scorecard: InterviewResult | null = null
+
+    if (sessionId) {
+      try {
+        const res = await fetch(`/api/interviews/${sessionId}/finish`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            config,
+            code,
+            notes,
+            events: [
+              {
+                sessionId,
+                type: reason === "submit" ? "submit" : "timeout",
+                phase: "wrapUp",
+                timestamp: new Date().toISOString(),
+                payload: { note: reason === "submit" ? "User pressed Submit Solution" : "Timer reached zero" },
+              },
+            ] satisfies InterviewEvent[],
+          }),
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          scorecard = data.scorecard as InterviewResult
+        }
+      } catch (e: any) {
+        console.error("Failed to generate interview scorecard", e)
+        setError(e.message || "Failed to generate interview feedback")
+      }
+    }
+
+    if (!scorecard) {
+      scorecard = {
+        rating: "Hire",
+        score: 80,
+        company: config?.company,
+        strengths: [
+          "Clearly stated at least one workable approach",
+          "Reasoned about time/space complexity at a basic level",
+        ],
+        weaknesses: ["Could structure clarification and edge cases more explicitly before coding"],
+        mistakes: [
+          {
+            time: "00:00",
+            severity: "minor",
+            phase: "clarification",
+            category: "clarification",
+            message: "Did not explicitly restate the problem and constraints at the beginning.",
+          },
+        ],
+      }
+    }
+
+    try {
+      if (interviewDocId) {
+        await recordInterviewEnd(interviewDocId, scorecard)
+        setInterviewDocId(null)
+      }
+    } catch (e: any) {
+      console.error("Failed to record interview end:", e)
+      setError(e.message || "Failed to save interview result")
+    } finally {
+      setloading(false)
+    }
+
+    onFinish(scorecard)
+  }
+
+  const handleFinish = () => {
+    (async () => {
+      await finalizeInterview("timeout")
     })()
   }
 
   async function handleEnd() {
-    if (!interviewDocId) {
-      setError("No active interview to end");
-      return;
-    }
-    setloading(true);
-    try {
-      await recordInterviewEnd(interviewDocId, { score: 100 });
-      setInterviewDocId(null);
-    } catch (e: any) {
-      setError(e.message || "Failed to end interview");
-    } finally {
-      setloading(false);
-    }
-
-    onFinish({
-      rating: "Strong Hire",
-      score: 85,
-      strengths: [
-        "Clearly stated assumptions before coding",
-        "Discussed time/space complexity tradeoffs",
-        "Handled edge cases systematically",
-      ],
-      weaknesses: [
-        "Could have optimized the initial approach earlier",
-        "Missed opportunity to discuss alternative data structures",
-      ],
-      mistakes: [
-        { time: "12:34", severity: "minor", message: "Minor syntax error in loop condition" },
-        { time: "23:15", severity: "major", message: "Didn't verify solution with example before submitting" },
-      ],
+    await sendEvent({
+      type: "submit",
+      phase: "wrapUp",
+      timestamp: new Date().toISOString(),
+      payload: { note: "User pressed Submit Solution" },
     })
 
+    await finalizeInterview("submit")
   }
 
   const handleUseHint = () => {
