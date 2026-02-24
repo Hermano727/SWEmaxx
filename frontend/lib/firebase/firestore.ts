@@ -83,7 +83,10 @@ export async function recordInterviewEnd(
   const startedMs = startedAt?.toDate?.()?.getTime?.() ?? Date.now();
   const nowMs = Date.now();
   const durationSeconds = Math.round((nowMs - startedMs) / 1000);
-  const score = computeScoreFromDurationSeconds(durationSeconds);
+  const scorecardScore =
+    typeof result?.score === "number" ? result.score : undefined;
+  const score =
+    scorecardScore ?? computeScoreFromDurationSeconds(durationSeconds);
 
   await updateDoc(docRef, {
     endedAt: serverTimestamp(),

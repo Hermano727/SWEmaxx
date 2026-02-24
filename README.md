@@ -27,22 +27,23 @@ auth/ Auth functions, Supabase edge functions (future)
 
 ### 1. Install dependencies
 cd frontend
-pnpm install
+npm install
 
 
 ### 2. Environment Variables
 Copy:
+```bash
 cp frontend/.env.local.example frontend/.env.local
-
-Fill in keys such as Supabase, OpenAI, Resend, etc.
+```
+Fill in keys (Firebase, OpenAI, etc.). For **OpenAI** (interview scorecard), see [frontend/docs/OPENAI_SETUP.md](frontend/docs/OPENAI_SETUP.md).
 
 ### 3. Run Dev Server
-pnpm dev
+npm run dev
 
 
 ### 4. Lint + Type Check
-pnpm lint
-pnpm type-check
+npm lint
+npm type-check
 
 
 ## CI / Automation
