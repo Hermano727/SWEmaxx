@@ -5,6 +5,7 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
   onSnapshot,
   orderBy,
   updateDoc,
@@ -12,6 +13,20 @@ import {
 } from "firebase/firestore";
 
 import { getDbClient } from "./clientApp";
+
+/**
+ * Skeleton score based on session duration only. Used until we have real grading.
+ * TODO: Replace with AI rubric-based scoring (scorecard, mistakes, communication, etc.).
+ */
+function computeScoreFromDurationSeconds(durationSeconds: number): number {
+  // Arbitrary curve: short sessions get lower score, 25–45 min gets 70–90, then plateaus.
+  if (durationSeconds <= 0) return 0;
+  const minutes = durationSeconds / 60;
+  if (minutes < 5) return Math.min(40, Math.round(minutes * 8));
+  if (minutes < 25) return Math.min(70, 40 + Math.round((minutes - 5) * 1.5));
+  if (minutes <= 45) return 70 + Math.round((minutes - 25));
+  return Math.min(95, 90 + Math.round((minutes - 45) * 0.2));
+}
 
 /**
  * Record when a user starts an interview.
@@ -38,7 +53,7 @@ export async function recordInterviewStart(
     origin: origin ?? null,
     startedAt: serverTimestamp(),
     status: "started",
-  }
+  };
 
   const db = getDbClient();
   const colRef = collection(db, "interviews");
@@ -47,19 +62,36 @@ export async function recordInterviewStart(
   return docRef.id;
 }
 
+/**
+ * Record interview end: writes endedAt, result, status, durationSeconds, and score.
+ * Duration is computed from doc's startedAt to now. Score uses a time-based skeleton;
+ * TODO: replace with AI grading when available.
+ */
 export async function recordInterviewEnd(
-    docId: string,
-    result: Record<string, any> = {}
+  docId: string,
+  result: Record<string, any> = {}
 ): Promise<void> {
-    if (!docId) throw new Error("recordInterviewEnd requires a docId");
-    
-    const db = getDbClient();
-    const docRef = doc(db, "interviews", docId);
-    await updateDoc(docRef, {
-        endedAt: serverTimestamp(),
-        result,
-        status: "completed",
-    });
+  if (!docId) throw new Error("recordInterviewEnd requires a docId");
+
+  const db = getDbClient();
+  const docRef = doc(db, "interviews", docId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) throw new Error("Interview document not found");
+
+  const data = snap.data();
+  const startedAt = data?.startedAt;
+  const startedMs = startedAt?.toDate?.()?.getTime?.() ?? Date.now();
+  const nowMs = Date.now();
+  const durationSeconds = Math.round((nowMs - startedMs) / 1000);
+  const score = computeScoreFromDurationSeconds(durationSeconds);
+
+  await updateDoc(docRef, {
+    endedAt: serverTimestamp(),
+    result,
+    status: "completed",
+    durationSeconds,
+    score,
+  });
 }
 
 export async function fetchUserHistory(userId: string) {

@@ -15,31 +15,27 @@ type Meta = {
 
 export default function MetaGrid({ meta }: { meta: Meta }) {
   return (
-    <div className="mt-4 w-full">
+    <div className="w-full">
       <div className="grid grid-cols-2 gap-3">
-        <div className="p-3 rounded-md bg-[#1a1d23] border border-[#3b3f4d]">
-          <div className="text-sm text-[#9ca3af]">Time Limit</div>
-          <div className="text-white font-medium">{meta.timeLimit ? "Yes" : "No"}</div>
+        <div className="rounded-lg border border-border bg-muted/50 p-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Time limit</div>
+          <div className="mt-1 font-medium text-foreground">{meta.timeLimit ? "Yes" : "No"}</div>
         </div>
-
-        <div className="p-3 rounded-md bg-[#1a1d23] border border-[#3b3f4d]">
-          <div className="text-sm text-[#9ca3af]">Difficulty</div>
-          <div className="text-white font-medium">{meta.difficulty ?? "—"}</div>
+        <div className="rounded-lg border border-border bg-muted/50 p-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Difficulty</div>
+          <div className="mt-1 font-medium text-foreground">{meta.difficulty ?? ""}</div>
         </div>
-
-        <div className="p-3 rounded-md bg-[#1a1d23] border border-[#3b3f4d]">
-          <div className="text-sm text-[#9ca3af]">Mode</div>
-          <div className="text-white font-medium">{meta.mode ?? "—"}</div>
+        <div className="rounded-lg border border-border bg-muted/50 p-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Mode</div>
+          <div className="mt-1 font-medium text-foreground">{meta.mode ?? ""}</div>
         </div>
-
-        <div className="p-3 rounded-md bg-[#1a1d23] border border-[#3b3f4d]">
-          <div className="text-sm text-[#9ca3af]">Live Feedback</div>
-          <div className="text-white font-medium">{meta.liveFeedback ? "On" : "Off"}</div>
+        <div className="rounded-lg border border-border bg-muted/50 p-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Live feedback</div>
+          <div className="mt-1 font-medium text-foreground">{meta.liveFeedback ? "On" : "Off"}</div>
         </div>
-
-        <div className="col-span-2 p-3 rounded-md bg-[#1a1d23] border border-[#3b3f4d]">
-          <div className="text-sm text-[#9ca3af]">Hints Enabled</div>
-          <div className="text-white font-medium">{meta.hintsEnabled ? "Yes" : "No"}</div>
+        <div className="col-span-2 rounded-lg border border-border bg-muted/50 p-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Hints enabled</div>
+          <div className="mt-1 font-medium text-foreground">{meta.hintsEnabled ? "Yes" : "No"}</div>
         </div>
       </div>
     </div>

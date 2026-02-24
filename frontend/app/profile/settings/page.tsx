@@ -1,95 +1,147 @@
+"use client"
+
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, Bell, Shield, CreditCard } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
+
+type TabId = "profile" | "notifications" | "privacy" | "billing"
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "profile", label: "Profile" },
+  { id: "notifications", label: "Notifications" },
+  { id: "privacy", label: "Privacy & Security" },
+  { id: "billing", label: "Billing" },
+]
 
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<TabId>("profile")
+
   return (
-    <main className="min-h-screen pt-24 pb-16 px-4">
-      <div className="container mx-auto max-w-5xl">
-        <h1 className="text-4xl font-bold text-[#00FF41] mb-8">{">"} Settings</h1>
+    <main className="min-h-screen bg-background pt-24 pb-16">
+      <div className="container mx-auto max-w-5xl px-4">
+        <header className="mb-8">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Settings</h1>
+        </header>
 
-        <div className="space-y-6">
-          <Card className="bg-[#1E2127] border-[#30363D]">
-            <CardHeader>
-              <CardTitle className="text-[#00FF41] flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Profile Settings
-              </CardTitle>
-              <CardDescription className="text-[#8B949E]">Manage your account information</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm text-[#8B949E] block mb-2">Email</label>
-                <div className="text-[#00FF41]">user@swe.dev</div>
-              </div>
-              <div>
-                <label className="text-sm text-[#8B949E] block mb-2">Username</label>
-                <div className="text-[#00FF41]">swemaxxer_2025</div>
-              </div>
-              <Button className="bg-[#00FF41] text-[#0A0E11] hover:bg-[#FFB86C] glitch-hover">Edit Profile</Button>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#1E2127] border-[#30363D]">
-            <CardHeader>
-              <CardTitle className="text-[#00FF41] flex items-center gap-2">
-                <Bell className="h-5 w-5" />
-                Notifications
-              </CardTitle>
-              <CardDescription className="text-[#8B949E]">Configure your notification preferences</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {["Email notifications", "Interview reminders", "New intel drops", "Referral updates"].map((item, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-[#8B949E]">{item}</span>
-                  <div className="w-12 h-6 bg-[#00FF41] rounded-full" />
-                </div>
+        <div className="flex flex-col md:flex-row gap-8">
+          <nav
+            className="shrink-0 md:w-52"
+            aria-label="Settings sections"
+          >
+            <ul className="space-y-1 border-r border-border pr-4 md:pr-6">
+              {TABS.map((tab) => (
+                <li key={tab.id}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      "w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                      activeTab === tab.id
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                </li>
               ))}
-            </CardContent>
-          </Card>
+            </ul>
+          </nav>
 
-          <Card className="bg-[#1E2127] border-[#30363D]">
-            <CardHeader>
-              <CardTitle className="text-[#00FF41] flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Privacy & Security
-              </CardTitle>
-              <CardDescription className="text-[#8B949E]">Manage your security settings</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button
-                variant="outline"
-                className="w-full border-[#30363D] text-[#00FF41] hover:bg-[#00FF41] hover:text-[#0A0E11] bg-transparent"
-              >
-                Change Password
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full border-[#30363D] text-[#00FF41] hover:bg-[#00FF41] hover:text-[#0A0E11] bg-transparent"
-              >
-                Enable 2FA
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="flex-1 min-w-0">
+            <Card className="border-border bg-card">
+              {activeTab === "profile" && (
+                <>
+                  <CardHeader>
+                    <CardTitle className="text-foreground">Profile</CardTitle>
+                    <CardDescription className="text-muted-foreground">
+                      Manage your account information
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div>
+                      <Label className="text-muted-foreground">Email</Label>
+                      <div className="mt-1 text-foreground">user@swe.dev</div>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Username</Label>
+                      <div className="mt-1 text-foreground">swemaxxer_2025</div>
+                    </div>
+                    <Button className="bg-primary text-primary-foreground hover:opacity-90">
+                      Edit profile
+                    </Button>
+                  </CardContent>
+                </>
+              )}
 
-          <Card className="bg-[#1E2127] border-[#30363D]">
-            <CardHeader>
-              <CardTitle className="text-[#00FF41] flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Billing
-              </CardTitle>
-              <CardDescription className="text-[#8B949E]">Manage your subscription and payment methods</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 bg-[#0A0E11] rounded border border-[#00FF41]">
-                <div className="text-[#00FF41] font-bold mb-1">Pro Plan</div>
-                <div className="text-sm text-[#8B949E]">$29/month • Renews on Feb 15, 2025</div>
-              </div>
-              <Button className="bg-[#00FF41] text-[#0A0E11] hover:bg-[#FFB86C] glitch-hover">
-                Manage Subscription
-              </Button>
-            </CardContent>
-          </Card>
+              {activeTab === "notifications" && (
+                <>
+                  <CardHeader>
+                    <CardTitle className="text-foreground">Notifications</CardTitle>
+                    <CardDescription className="text-muted-foreground">
+                      Configure notification preferences
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {["Email notifications", "Interview reminders", "New intel drops", "Referral updates"].map(
+                      (item, i) => (
+                        <div key={i} className="flex items-center justify-between gap-4">
+                          <Label htmlFor={`notif-${i}`} className="text-foreground font-normal">
+                            {item}
+                          </Label>
+                          <Switch id={`notif-${i}`} defaultChecked={i < 2} />
+                        </div>
+                      )
+                    )}
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === "privacy" && (
+                <>
+                  <CardHeader>
+                    <CardTitle className="text-foreground">Privacy & Security</CardTitle>
+                    <CardDescription className="text-muted-foreground">
+                      Manage security settings
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Button variant="outline" className="w-full border-border text-foreground hover:bg-muted">
+                      Change password
+                    </Button>
+                    <Button variant="outline" className="w-full border-border text-foreground hover:bg-muted">
+                      Enable 2FA
+                    </Button>
+                  </CardContent>
+                </>
+              )}
+
+              {activeTab === "billing" && (
+                <>
+                  <CardHeader>
+                    <CardTitle className="text-foreground">Billing</CardTitle>
+                    <CardDescription className="text-muted-foreground">
+                      Subscription and payment methods
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <div className="font-medium text-foreground">Pro Plan</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        $29/month. Renews Feb 15, 2025
+                      </div>
+                    </div>
+                    <Button className="bg-primary text-primary-foreground hover:opacity-90">
+                      Manage subscription
+                    </Button>
+                  </CardContent>
+                </>
+              )}
+            </Card>
+          </div>
         </div>
       </div>
     </main>

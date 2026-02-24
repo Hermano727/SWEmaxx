@@ -42,24 +42,25 @@
 /* Clean, LeetCode-inspired dark theme with muted greens */
 /* Updated dark theme with higher contrast background and removed neon effects */
 .dark {
-  --background: #1a1d23;
+  --background: #0d1117;
   --foreground: #f0f0f0;
-  --card: #242830;
+  --card: #1a1d23;
   --card-foreground: #f0f0f0;
-  --popover: #242830;
+  --popover: #1a1d23;
   --popover-foreground: #f0f0f0;
   --primary: #46a758;
   --primary-foreground: #ffffff;
-  --secondary: #2f3541;
+  --secondary: #22262e;
   --secondary-foreground: #f0f0f0;
-  --muted: #242830;
-  --muted-foreground: #b0b0b0;
-  --accent: #2f3541;
+  --muted: #22262e;
+  --muted-foreground: #8b949e;
+  --accent: #14b8a6;
   --accent-foreground: #f0f0f0;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
   --destructive: #e5484d;
   --destructive-foreground: #ffffff;
-  --border: #3b3f4d;
-  --input: #242830;
+  --input: #22262e;
   --ring: #46a758;
   --chart-1: #46a758;
   --chart-2: #3b82f6;

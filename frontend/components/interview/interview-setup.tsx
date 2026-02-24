@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Building2, Clock, Zap } from "lucide-react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -10,6 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { recordInterviewStart, recordInterviewEnd } from "@/lib/firebase/firestore"
 import { signInWithGoogle, onAuthStateChanged } from "@/lib/firebase/auth"
+
+const LOGO_MAP: Record<string, string> = {
+  google: "/assets/logos/google.png",
+  meta: "/assets/logos/meta.png",
+  amazon: "/assets/logos/amazon.svg",
+}
 
 interface InterviewSetupProps {
   onStart: (config: any) => void
@@ -28,11 +34,10 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
   const [difficulty, setDifficulty] = useState("random")
   const [timeLimit, setTimeLimit] = useState(true)
   const [hintsEnabled, setHintsEnabled] = useState(true)
-  // Firebase Auth
-  const [userId, setUserId] = useState<string | null>(null);
-  const [interviewDocId, setInterviewDocId] = useState<string | null>(null);
-  const [loading, setloading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null)
+  const [interviewDocId, setInterviewDocId] = useState<string | null>(null)
+  const [loading, setloading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const unsub = onAuthStateChanged((u) => {
@@ -48,11 +53,11 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
   }
 
   async function handleStart() {
-    setError(null);
-    setloading(true);
-    let docId: string | null = null;
+    setError(null)
+    setloading(true)
+    let docId: string | null = null
     try {
-      const uid = await ensureSignedIn();
+      const uid = await ensureSignedIn()
       const meta = {
         company: selectedCompany,
         mode: interviewMode,
@@ -61,17 +66,14 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
         timeLimit,
         hintsEnabled,
       }
-      docId = await recordInterviewStart(uid, meta, "web");
-      setInterviewDocId(docId);
+      docId = await recordInterviewStart(uid, meta, "web")
+      setInterviewDocId(docId)
     } catch (e: any) {
-      setError(e.message || "Failed to start interview");
+      setError(e.message || "Failed to start interview")
     } finally {
-      setloading(false);
+      setloading(false)
     }
 
-    // Pass the interviewDocId back to the caller so the running interview can
-    // associate future end/update calls with this document. This keeps
-    // persistence decoupled from the UI config object.
     onStart({
       company: selectedCompany,
       mode: interviewMode,
@@ -84,90 +86,106 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-4 bg-[#0d1117]">
+    <div className="min-h-screen bg-background pt-24 pb-16 px-4">
       <div className="container mx-auto max-w-4xl">
-        <div className="mb-12 text-center">
-          <h1 className="text-4xl font-bold text-[#46a758] mb-4">Interview Setup</h1>
-          <p className="text-gray-400">Configure your interview parameters to begin</p>
-        </div>
+        <header className="mb-12 text-center">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Interview Setup</h1>
+          <p className="mt-2 text-muted-foreground">Configure your interview parameters to begin</p>
+        </header>
 
         <div className="space-y-8">
-          {/* Company Selection */}
-          <Card className="bg-[#1a1d23] border-[#30363d]">
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-[#46a758]" />
-                Select Company
-              </CardTitle>
+              <CardTitle className="text-foreground">Select company</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid sm:grid-cols-3 gap-4">
-                {companies.map((company) => (
-                  <button
-                    key={company.id}
-                    onClick={() => setSelectedCompany(company.id)}
-                    className={`p-4 rounded-lg border-2 transition-all text-left ${
-                      selectedCompany === company.id
-                        ? "border-[#46a758] bg-[#46a758]/10"
-                        : "border-[#30363d] hover:border-[#46a758]/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-10 h-10 rounded-lg bg-[#30363d] flex items-center justify-center text-white font-bold">
-                        {company.name[0]}
+                {companies.map((company) => {
+                  const logo = LOGO_MAP[company.id]
+                  const isSelected = selectedCompany === company.id
+                  return (
+                    <button
+                      key={company.id}
+                      type="button"
+                      onClick={() => setSelectedCompany(company.id)}
+                      className={`flex items-start gap-3 rounded-lg border-2 p-4 text-left transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      {logo ? (
+                        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                          <Image
+                            src={logo}
+                            alt={company.name}
+                            width={40}
+                            height={40}
+                            className="object-contain p-1"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-sm font-medium text-muted-foreground">
+                          {company.name[0]}
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-semibold text-foreground">{company.name}</div>
+                        <p className="text-sm text-muted-foreground">{company.tagline}</p>
                       </div>
-                      <div className="font-semibold text-white">{company.name}</div>
-                    </div>
-                    <p className="text-sm text-gray-400">{company.tagline}</p>
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
 
-          {/* Interview Mode */}
-          <Card className="bg-[#1a1d23] border-[#30363d]">
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Zap className="h-5 w-5 text-[#46a758]" />
-                Interview Mode
-              </CardTitle>
+              <CardTitle className="text-foreground">Interview mode</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid sm:grid-cols-2 gap-4">
                 <button
+                  type="button"
                   onClick={() => setInterviewMode("silent")}
-                  className={`p-6 rounded-lg border-2 transition-all text-left ${
+                  className={`rounded-lg border-2 p-6 text-left transition-colors ${
                     interviewMode === "silent"
-                      ? "border-[#46a758] bg-[#46a758]/10"
-                      : "border-[#30363d] hover:border-[#46a758]/50"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:border-primary/50"
                   }`}
                 >
-                  <h3 className="font-semibold text-white mb-2">Silent Interviewer</h3>
-                  <p className="text-sm text-gray-400">
+                  <h3 className="font-semibold text-foreground">Silent interviewer</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
                     AI observes and grades at the end. Best for realistic practice.
                   </p>
                 </button>
 
                 <button
-                  onClick={() => setInterviewMode("active")}
+                  type="button"
                   disabled
-                  className="p-6 rounded-lg border-2 border-[#30363d] bg-[#30363d]/20 text-left opacity-50 cursor-not-allowed"
+                  className="cursor-not-allowed rounded-lg border-2 border-border bg-muted/30 p-6 text-left opacity-60"
                 >
-                  <h3 className="font-semibold text-white mb-2">
-                    Active Interviewer
-                    <span className="ml-2 text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded">Coming Soon</span>
+                  <h3 className="font-semibold text-foreground">
+                    Active interviewer
+                    <span className="ml-2 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      Coming soon
+                    </span>
                   </h3>
-                  <p className="text-sm text-gray-400">AI actively engages and provides hints during interview.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    AI actively engages and provides hints during the interview.
+                  </p>
                 </button>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-lg bg-[#0d1117] border border-[#30363d]">
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
                 <div>
-                  <Label htmlFor="live-feedback" className="text-white font-medium">
-                    Live Feedback Mode
+                  <Label htmlFor="live-feedback" className="font-medium text-foreground">
+                    Live feedback mode
                   </Label>
-                  <p className="text-sm text-gray-400 mt-1">Get stopped and guided at crucial moments</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Get stopped and guided at crucial moments
+                  </p>
                 </div>
                 <Switch
                   id="live-feedback"
@@ -179,19 +197,18 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
             </CardContent>
           </Card>
 
-          {/* Question Selection & Advanced Options */}
-          <Card className="bg-[#1a1d23] border-[#30363d]">
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-white">Question Selection</CardTitle>
+              <CardTitle className="text-foreground">Question selection</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label className="text-white">Difficulty</Label>
+                <Label className="text-foreground">Difficulty</Label>
                 <Select value={difficulty} onValueChange={setDifficulty}>
-                  <SelectTrigger className="bg-[#0d1117] border-[#30363d] text-white">
+                  <SelectTrigger className="border-border bg-muted/30 text-foreground">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1a1d23] border-[#30363d]">
+                  <SelectContent className="border-border bg-card">
                     <SelectItem value="random">Random</SelectItem>
                     <SelectItem value="easy">Easy</SelectItem>
                     <SelectItem value="medium">Medium</SelectItem>
@@ -200,36 +217,40 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
                 </Select>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-lg bg-[#0d1117] border border-[#30363d]">
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
                 <div>
-                  <Label htmlFor="time-limit" className="text-white font-medium">
-                    Time Limit (45 minutes)
+                  <Label htmlFor="time-limit" className="font-medium text-foreground">
+                    Time limit (45 minutes)
                   </Label>
-                  <p className="text-sm text-gray-400 mt-1">Standard interview duration</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">Standard interview duration</p>
                 </div>
                 <Switch id="time-limit" checked={timeLimit} onCheckedChange={setTimeLimit} />
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-lg bg-[#0d1117] border border-[#30363d]">
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
                 <div>
-                  <Label htmlFor="hints" className="text-white font-medium">
-                    Enable Hints
+                  <Label htmlFor="hints" className="font-medium text-foreground">
+                    Enable hints
                   </Label>
-                  <p className="text-sm text-gray-400 mt-1">3 hints available during interview</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">3 hints available during the interview</p>
                 </div>
                 <Switch id="hints" checked={hintsEnabled} onCheckedChange={setHintsEnabled} />
               </div>
             </CardContent>
           </Card>
 
-          {/* Start Button */}
-          <div className="flex items-center justify-between p-6 bg-[#1a1d23] border border-[#30363d] rounded-lg">
-            <div className="flex items-center gap-2 text-gray-400">
-              <Clock className="h-4 w-4" />
-              <span className="text-sm">Estimated duration: 45-60 minutes</span>
-            </div>
-            <Button onClick={handleStart} size="lg" className="bg-[#46a758] hover:bg-[#3d8f4a] text-white">
-              Start Interview
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 rounded-lg border border-border bg-card p-6">
+            <p className="text-sm text-muted-foreground">Estimated duration: 45 to 60 minutes</p>
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
+            <Button
+              onClick={handleStart}
+              size="lg"
+              disabled={loading}
+              className="bg-primary text-primary-foreground hover:opacity-90 shrink-0"
+            >
+              {loading ? "Starting…" : "Start interview"}
             </Button>
           </div>
         </div>
