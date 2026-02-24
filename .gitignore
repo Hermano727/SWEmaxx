@@ -70,3 +70,4 @@ Thumbs.db
 # Misc
 *.env.test
 *.localhistory
+*.cursor
