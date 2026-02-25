@@ -4,6 +4,12 @@
  */
 export type Difficulty = "easy" | "medium" | "hard"
 
+// Languages supported in the live interview editor.
+export type EditorLanguage = "javascript" | "python" | "java" | "cpp"
+
+export const SUPPORTED_EDITOR_LANGUAGES: EditorLanguage[] = ["python", "javascript", "java", "cpp"]
+export const DEFAULT_EDITOR_LANGUAGE: EditorLanguage = "python"
+
 export type QuestionBankItem = {
   id: string
   title: string
@@ -11,6 +17,8 @@ export type QuestionBankItem = {
   description: string
   examples: { input: string; output: string; explanation?: string }[]
   constraints: string[]
+  /** Up to three progressively stronger hints shown during the interview. */
+  hints?: string[]
 }
 
 export const QUESTION_BANK: QuestionBankItem[] = [
@@ -32,6 +40,11 @@ export const QUESTION_BANK: QuestionBankItem[] = [
       "-10⁹ ≤ nums[i] ≤ 10⁹",
       "Only one valid answer exists.",
     ],
+    hints: [
+      "Start with the naive approach: check every pair of indices to see if they sum to the target. What is its time complexity?",
+      "Can you trade extra space for time by remembering numbers you've already seen while scanning the array once?",
+      "Use a hash map from value to index. As you iterate, for each nums[i] check if target - nums[i] is already in the map; if so, you have your pair.",
+    ],
   },
   {
     id: "valid-parentheses",
@@ -47,6 +60,11 @@ export const QUESTION_BANK: QuestionBankItem[] = [
     constraints: [
       "1 ≤ s.length ≤ 10⁴",
       "s consists of parentheses only '()[]{}'.",
+    ],
+    hints: [
+      "When you see an opening bracket, what do you expect to see later for the string to stay valid?",
+      "Try scanning left to right and keeping track of the sequence of unmatched opening brackets.",
+      "Use a stack: push opening brackets, and for each closing bracket, pop and verify that it matches. The stack must end empty for a valid string.",
     ],
   },
   {
@@ -67,6 +85,11 @@ export const QUESTION_BANK: QuestionBankItem[] = [
       "0 ≤ Node.val ≤ 9",
       "It is guaranteed that the list represents a number that does not have leading zeros.",
     ],
+    hints: [
+      "Think about how you add two numbers on paper from right to left, keeping track of a carry.",
+      "You can walk both lists at the same time, adding their current digits and a carry value. What happens when one list is shorter?",
+      "Maintain a running carry and build a new list node by node. Continue while there is at least one node left or a non-zero carry.",
+    ],
   },
   {
     id: "longest-substring-without-repeating",
@@ -81,6 +104,11 @@ export const QUESTION_BANK: QuestionBankItem[] = [
     constraints: [
       "0 ≤ s.length ≤ 5 * 10⁴",
       "s consists of English letters, digits, symbols and spaces.",
+    ],
+    hints: [
+      "A brute-force approach would check every substring and test whether it has repeating characters. How expensive is that?",
+      "Consider maintaining a current window of characters with no repeats as you move a right pointer through the string.",
+      "Use a sliding window with last-seen indices: when you see a repeated character, move the left pointer past its previous index and update the maximum length.",
     ],
   },
   {
@@ -98,6 +126,11 @@ export const QUESTION_BANK: QuestionBankItem[] = [
       "nums2.length == n",
       "0 ≤ m ≤ 1000, 0 ≤ n ≤ 1000",
       "1 ≤ m + n ≤ 2000",
+    ],
+    hints: [
+      "One obvious approach is to merge the two sorted arrays and then take the median. What time and space would that use?",
+      "The median is defined by how many elements lie on each side. Can you think of this as choosing a partition point rather than explicitly merging?",
+      "Binary search on the smaller array's partition index so that the combined left part has half the elements and all left elements are ≤ all right elements; then compute the median from the border values.",
     ],
   },
 ]
@@ -125,8 +158,12 @@ export function capitalizeDifficulty(d: string): string {
   return d.charAt(0).toUpperCase() + d.slice(1).toLowerCase()
 }
 
-/** Default code template per problem id (JavaScript). Used for Reset and initial state. */
-export const CODE_TEMPLATES: Record<string, string> = {
+/**
+ * Default code templates per problem id, for each supported language.
+ * These are intentionally lightweight "starter" templates – the editor does
+ * not execute code yet, so the goal is to give candidates a familiar shell.
+ */
+const JS_CODE_TEMPLATES: Record<string, string> = {
   "two-sum": `function twoSum(nums, target) {
   // Your code here
 }`,
@@ -143,9 +180,95 @@ export const CODE_TEMPLATES: Record<string, string> = {
   // Your code here
 }`,
 }
-const DEFAULT_CODE_TEMPLATE = `function solve(input) {
+
+const PYTHON_CODE_TEMPLATES: Record<string, string> = {
+  "two-sum": `from typing import List
+
+def two_sum(nums: List[int], target: int) -> List[int]:
+    # Your code here
+    pass
+`,
+  "valid-parentheses": `def is_valid(s: str) -> bool:
+    # Your code here
+    pass
+`,
+  "add-two-numbers": `class ListNode:
+    def __init__(self, val: int = 0, next: "ListNode | None" = None):
+        self.val = val
+        self.next = next
+
+
+def add_two_numbers(l1: ListNode | None, l2: ListNode | None) -> ListNode | None:
+    # Your code here
+    pass
+`,
+  "longest-substring-without-repeating": `def length_of_longest_substring(s: str) -> int:
+    # Your code here
+    return 0
+`,
+  "median-of-two-sorted-arrays": `from typing import List
+
+def find_median_sorted_arrays(nums1: List[int], nums2: List[int]) -> float:
+    # Your code here
+    return 0.0
+`,
+}
+
+const JAVA_CODE_TEMPLATES: Record<string, string> = {
+  "two-sum": `class Solution {
+    public int[] twoSum(int[] nums, int target) {
+        // Your code here
+        return new int[0];
+    }
+}
+`,
+}
+
+const CPP_CODE_TEMPLATES: Record<string, string> = {
+  "two-sum": `#include <vector>
+using namespace std;
+
+vector<int> twoSum(const vector<int>& nums, int target) {
+    // Your code here
+    return {};
+}
+`,
+}
+
+const DEFAULT_CODE_TEMPLATES: Record<EditorLanguage, string> = {
+  javascript: `function solve(input) {
   // Your code here
-}`
-export function getCodeTemplate(problemId: string): string {
-  return CODE_TEMPLATES[problemId] ?? DEFAULT_CODE_TEMPLATE
+}
+`,
+  python: `def solve():
+    # Your code here
+    pass
+`,
+  java: `class Solution {
+    public void solve() {
+        // Your code here
+    }
+}
+`,
+  cpp: `#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    // Your code here
+    return 0;
+}
+`,
+}
+
+/** Get a language-aware starter template for a given problem. */
+export function getCodeTemplate(problemId: string, language: EditorLanguage = "javascript"): string {
+  const byLanguage: Record<EditorLanguage, Record<string, string>> = {
+    javascript: JS_CODE_TEMPLATES,
+    python: PYTHON_CODE_TEMPLATES,
+    java: JAVA_CODE_TEMPLATES,
+    cpp: CPP_CODE_TEMPLATES,
+  }
+
+  const templates = byLanguage[language] ?? JS_CODE_TEMPLATES
+  return templates[problemId] ?? DEFAULT_CODE_TEMPLATES[language] ?? DEFAULT_CODE_TEMPLATES.javascript
 }

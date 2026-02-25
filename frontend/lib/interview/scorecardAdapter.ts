@@ -7,7 +7,7 @@ import type { InterviewResult, InterviewEvent } from "./types"
  * Server-only: do not import from client components.
  */
 
-const DEFAULT_MODEL = "gpt-4o-mini"
+export const DEFAULT_INTERVIEW_MODEL = "gpt-4o-mini"
 
 export type ScorecardAdapterInput = {
   company: string
@@ -17,7 +17,7 @@ export type ScorecardAdapterInput = {
   events: InterviewEvent[]
 }
 
-function getOpenAIClient(): OpenAI | null {
+export function getOpenAIClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY
   if (!key?.trim()) return null
   return new OpenAI({ apiKey: key })
@@ -26,7 +26,7 @@ function getOpenAIClient(): OpenAI | null {
 /**
  * Builds a company-specific rubric hint for the prompt.
  */
-function getCompanyContext(company: string): string {
+export function getCompanyContext(company: string): string {
   const c = company.toLowerCase()
   if (c === "google") {
     return "Google style: problem framing, clarifying constraints, edge cases, 5–10 min discussion before code, no running code expected, strong follow-ups."
@@ -51,7 +51,7 @@ export async function getScorecardFromLLM(
   const client = getOpenAIClient()
   if (!client) return null
 
-  const model = options?.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL
+  const model = options?.model ?? process.env.OPENAI_MODEL ?? DEFAULT_INTERVIEW_MODEL
   const companyContext = getCompanyContext(input.company)
 
   const eventsSummary =

@@ -30,10 +30,6 @@ export default function InterviewNavbar({
   const [darkMode, setDarkMode] = useState(true)
   const [hintsEnabled, setHintsEnabled] = useState(true)
 
-  if (!isVisible) {
-    return null
-  }
-
   return (
     <>
       <div className="bg-[#1a1d23] border-b border-[#30363d] px-6 py-4">
@@ -47,19 +43,34 @@ export default function InterviewNavbar({
 
           {/* Center: Timer with collapse button */}
           {timeRemaining !== undefined && (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-white font-mono text-lg">
-                <Clock className="h-5 w-5" />
-                <span className={timeRemaining < 300 ? "text-red-400" : ""}>{formatTime(timeRemaining)}</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onToggleVisibility(false)}
-                className="text-gray-400 hover:text-white hover:bg-[#30363d]"
-              >
-                <ChevronUp className="h-4 w-4" />
-              </Button>
+            <div className="flex items-center justify-center flex-1">
+              {isVisible ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 text-white font-mono text-lg">
+                    <Clock className="h-5 w-5" />
+                    <span className={timeRemaining < 300 ? "text-red-400" : ""}>{formatTime(timeRemaining)}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onToggleVisibility(false)}
+                    className="text-gray-400 hover:text-white hover:bg-[#30363d]"
+                    title="Hide timer"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onToggleVisibility(true)}
+                  className="text-gray-400 hover:text-white hover:bg-[#30363d] px-3 py-1 rounded-full text-xs flex items-center gap-2"
+                >
+                  <Clock className="h-4 w-4" />
+                  <span>Show timer</span>
+                </Button>
+              )}
             </div>
           )}
 
