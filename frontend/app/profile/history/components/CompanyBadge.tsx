@@ -2,12 +2,7 @@
 
 import React from "react"
 import Image from "next/image"
-
-const LOGO_MAP: Record<string, string> = {
-  google: "/assets/logos/google.png",
-  meta: "/assets/logos/meta.png",
-  amazon: "/assets/logos/amazon.svg",
-}
+import { COMPANY_LOGO_MAP } from "@/lib/constants/companies"
 
 type Props = {
   company?: string
@@ -16,7 +11,7 @@ type Props = {
 
 export default function CompanyBadge({ company, size = 40 }: Props) {
   const name = (company ?? "").toString().trim().toLowerCase()
-  const src = name ? LOGO_MAP[name] : null
+  const src = name ? COMPANY_LOGO_MAP[name] : null
   const initial = name.length ? name.charAt(0).toUpperCase() : "?"
 
   if (src) {

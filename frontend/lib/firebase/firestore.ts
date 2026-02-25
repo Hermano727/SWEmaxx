@@ -63,13 +63,14 @@ export async function recordInterviewStart(
 }
 
 /**
- * Record interview end: writes endedAt, result, status, durationSeconds, and score.
+ * Record interview end: writes endedAt, result, status, durationSeconds, score, and optionally notes/code.
  * Duration is computed from doc's startedAt to now. Score uses a time-based skeleton;
  * TODO: replace with AI grading when available.
  */
 export async function recordInterviewEnd(
   docId: string,
-  result: Record<string, any> = {}
+  result: Record<string, any> = {},
+  extra?: { notes?: string; code?: string }
 ): Promise<void> {
   if (!docId) throw new Error("recordInterviewEnd requires a docId");
 
@@ -88,13 +89,17 @@ export async function recordInterviewEnd(
   const score =
     scorecardScore ?? computeScoreFromDurationSeconds(durationSeconds);
 
-  await updateDoc(docRef, {
+  const update: Record<string, any> = {
     endedAt: serverTimestamp(),
     result,
     status: "completed",
     durationSeconds,
     score,
-  });
+  };
+  if (extra?.notes !== undefined) update.notes = extra.notes;
+  if (extra?.code !== undefined) update.code = extra.code;
+
+  await updateDoc(docRef, update);
 }
 
 export async function fetchUserHistory(userId: string) {

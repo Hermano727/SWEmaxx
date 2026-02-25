@@ -8,14 +8,15 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-import { recordInterviewStart, recordInterviewEnd } from "@/lib/firebase/firestore"
+import { recordInterviewStart } from "@/lib/firebase/firestore"
 import { signInWithGoogle, onAuthStateChanged } from "@/lib/firebase/auth"
-
-const LOGO_MAP: Record<string, string> = {
-  google: "/assets/logos/google.png",
-  meta: "/assets/logos/meta.png",
-  amazon: "/assets/logos/amazon.svg",
-}
+import { COMPANY_LOGO_MAP } from "@/lib/constants/companies"
+import {
+  pickRandomQuestion,
+  capitalizeDifficulty,
+  type QuestionBankItem,
+  type Difficulty,
+} from "@/lib/constants/questions"
 
 interface InterviewSetupProps {
   onStart: (config: any) => void
@@ -55,34 +56,37 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
   async function handleStart() {
     setError(null)
     setloading(true)
-    let docId: string | null = null
     try {
       const uid = await ensureSignedIn()
+      const question = pickRandomQuestion(difficulty as "random" | Difficulty)
       const meta = {
+        company: selectedCompany,
+        mode: interviewMode,
+        liveFeedback,
+        difficulty,
+        ...(difficulty === "random" && { drawnDifficulty: question.difficulty }),
+        timeLimit,
+        hintsEnabled,
+        problemId: question.id,
+        problemTitle: question.title,
+      }
+      const docId = await recordInterviewStart(uid, meta, "web")
+      setInterviewDocId(docId)
+      setloading(false)
+      onStart({
         company: selectedCompany,
         mode: interviewMode,
         liveFeedback,
         difficulty,
         timeLimit,
         hintsEnabled,
-      }
-      docId = await recordInterviewStart(uid, meta, "web")
-      setInterviewDocId(docId)
+        interviewDocId: docId,
+        problem: question,
+      })
     } catch (e: any) {
       setError(e.message || "Failed to start interview")
-    } finally {
       setloading(false)
     }
-
-    onStart({
-      company: selectedCompany,
-      mode: interviewMode,
-      liveFeedback,
-      difficulty,
-      timeLimit,
-      hintsEnabled,
-      interviewDocId: docId,
-    })
   }
 
   return (
@@ -101,7 +105,7 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
             <CardContent>
               <div className="grid sm:grid-cols-3 gap-4">
                 {companies.map((company) => {
-                  const logo = LOGO_MAP[company.id]
+                  const logo = COMPANY_LOGO_MAP[company.id]
                   const isSelected = selectedCompany === company.id
                   return (
                     <button

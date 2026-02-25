@@ -1,9 +1,10 @@
 rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /interviews/{docId} {
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow read, update: if request.auth != null && request.auth.uid == resource.data.userId;
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // No storage paths in use yet. Deny all until needed.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

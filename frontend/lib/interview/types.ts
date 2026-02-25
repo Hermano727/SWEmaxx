@@ -1,3 +1,11 @@
+export type InterviewMistake = {
+  time: string
+  severity: "minor" | "major" | "critical"
+  phase?: string
+  category?: string
+  message: string
+}
+
 export type InterviewResult = {
   id?: string
   company?: string
@@ -5,13 +13,7 @@ export type InterviewResult = {
   score: number
   strengths: string[]
   weaknesses: string[]
-  mistakes: Array<{
-    time: string
-    severity: "minor" | "major" | "critical"
-    phase?: string
-    category?: string
-    message: string
-  }>
+  mistakes: InterviewMistake[]
 }
 
 export interface InterviewEvent {

@@ -40,3 +40,11 @@ export async function signOut() {
   const auth = getAuthClient()
   return firebaseSignOut(auth)
 }
+
+/** Returns the current user's ID token for use in API requests (e.g. Authorization: Bearer <token>). Call from client only. Forces refresh so the token is valid. */
+export async function getCurrentIdToken(): Promise<string | null> {
+  const auth = getAuthClient()
+  const user = auth.currentUser
+  if (!user) return null
+  return user.getIdToken(true)
+}

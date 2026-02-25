@@ -19,7 +19,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import InterviewNavbar from "./interview-navbar"
 
 import { recordInterviewEnd } from "@/lib/firebase/firestore"
+import { getCurrentIdToken } from "@/lib/firebase/auth"
 import type { InterviewResult, InterviewEvent } from "@/lib/interview/types"
+import { getCodeTemplate } from "@/lib/constants/questions"
+import type { QuestionBankItem } from "@/lib/constants/questions"
 
 interface InterviewScreenProps {
   config: any
@@ -27,13 +30,47 @@ interface InterviewScreenProps {
   onExit: () => void
 }
 
+const TAB_SPACES = "     " // 5 spaces
+
+function useTabInsert(
+  value: string,
+  setValue: (v: string) => void
+) {
+  return (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Tab") return
+    e.preventDefault()
+    const ta = e.currentTarget
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const next = value.slice(0, start) + TAB_SPACES + value.slice(end)
+    setValue(next)
+    requestAnimationFrame(() => {
+      ta.selectionStart = ta.selectionEnd = start + TAB_SPACES.length
+    })
+  }
+}
+
+const defaultQuestion: QuestionBankItem = {
+  id: "two-sum",
+  title: "Two Sum",
+  difficulty: "easy",
+  description:
+    "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+  examples: [
+    { input: "nums = [2,7,11,15], target = 9", output: "[0,1]", explanation: "nums[0] + nums[1] = 2 + 7 = 9" },
+  ],
+  constraints: ["2 ≤ nums.length ≤ 10⁴", "-10⁹ ≤ nums[i] ≤ 10⁹", "Only one valid answer exists."],
+}
+
 export default function InterviewScreen({ config, onFinish, onExit }: InterviewScreenProps) {
+  const problem: QuestionBankItem = config?.problem ?? defaultQuestion
+  const initialCode = getCodeTemplate(problem.id)
   const [timeRemaining, setTimeRemaining] = useState(45 * 60)
-  const [code, setCode] = useState(`function twoSum(nums, target) {
-}`)
+  const [code, setCode] = useState(initialCode)
   const [notes, setNotes] = useState("")
+  const handleCodeTab = useTabInsert(code, setCode)
+  const handleNotesTab = useTabInsert(notes, setNotes)
   const [problemCollapsed, setProblemCollapsed] = useState(false)
-  const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false)
   const [language, setLanguage] = useState("javascript")
   const [hintsUsed, setHintsUsed] = useState(0)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
@@ -43,11 +80,9 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   const [isDragging, setIsDragging] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Firebase auth
-  const [userId, setUserId] = useState<string | null>(null);
-  const [interviewDocId, setInterviewDocId] = useState<string | null>(null);
-  const [loading, setloading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [interviewDocId, setInterviewDocId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     // If the parent provided an interviewDocId (from setup), use it so this
@@ -130,37 +165,52 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   }
 
   const finalizeInterview = async (reason: "submit" | "timeout") => {
+    if (!sessionId) {
+      setError("No interview session. Return to setup and start again.")
+      return
+    }
     let scorecard: InterviewResult | null = null
-    setloading(true)
+    setLoading(true)
+    setError(null)
     try {
+      const eventPayload: InterviewEvent = {
+        sessionId,
+        type: reason === "submit" ? "submit" : "timeout",
+        phase: "wrapUp",
+        timestamp: new Date().toISOString(),
+        payload: { note: reason === "submit" ? "User pressed Submit Solution" : "Timer reached zero" },
+      }
+      const token = await getCurrentIdToken()
+      if (!token) {
+        setError("You’re not signed in. Return to setup and sign in, then start the interview again.")
+        setLoading(false)
+        return
+      }
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      }
       const res = await fetch(`/api/interviews/${sessionId}/finish`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           config,
           code,
           notes,
-          events: [
-            {
-              sessionId,
-              type: reason === "submit" ? "submit" : "timeout",
-              phase: "wrapUp",
-              timestamp: new Date().toISOString(),
-              payload: { note: reason === "submit" ? "User pressed Submit Solution" : "Timer reached zero" },
-            },
-          ] satisfies InterviewEvent[],
+          events: [eventPayload],
         }),
       })
 
       if (res.ok) {
         const data = await res.json()
         scorecard = data.scorecard as InterviewResult
+      } else if (res.status === 401 || res.status === 403) {
+        const data = await res.json().catch(() => ({}))
+        setError((data.error as string) || "Unauthorized")
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Failed to generate interview scorecard", e)
-      setError(e.message || "Failed to generate interview feedback")
+      setError(e instanceof Error ? e.message : "Failed to generate interview feedback")
     }
 
     if (!scorecard) {
@@ -187,14 +237,14 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
 
     try {
       if (interviewDocId) {
-        await recordInterviewEnd(interviewDocId, scorecard)
+        await recordInterviewEnd(interviewDocId, scorecard, { notes, code })
         setInterviewDocId(null)
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Failed to record interview end:", e)
-      setError(e.message || "Failed to save interview result")
+      setError(e instanceof Error ? e.message : "Failed to save interview result")
     } finally {
-      setloading(false)
+      setLoading(false)
     }
 
     onFinish(scorecard)
@@ -262,34 +312,36 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
               className="flex items-center justify-between px-4 py-3 bg-[#1a1d23] border-b border-[#30363d] text-left text-white hover:bg-[#22262e] active:bg-[#242830] transition-colors rounded-none"
               aria-expanded={!problemCollapsed}
             >
-              <span className="text-sm font-semibold tracking-tight">Problem: Two Sum</span>
+              <span className="text-sm font-semibold tracking-tight">Problem: {problem.title}</span>
               {problemCollapsed ? <ChevronDown className="h-4 w-4 shrink-0 text-[#8b949e]" /> : <ChevronUp className="h-4 w-4 shrink-0 text-[#8b949e]" />}
             </button>
 
             {!problemCollapsed && (
               <div className="flex-1 overflow-y-auto p-4 bg-[#0d1117] min-h-0">
                 <div className="text-[#c9d1d9] space-y-4 text-sm leading-relaxed">
-                  <p>
-                    Given an array of integers <code className="bg-[#21262d] px-1.5 py-0.5 rounded text-[#79c0ff] font-mono text-[13px]">nums</code> and an
-                    integer <code className="bg-[#21262d] px-1.5 py-0.5 rounded text-[#79c0ff] font-mono text-[13px]">target</code>, return indices of the two
-                    numbers such that they add up to target.
-                  </p>
+                  <p>{problem.description}</p>
 
-                  <div>
-                    <p className="font-medium text-white text-[13px] mb-2">Example</p>
-                    <div className="bg-[#1a1d23] p-4 rounded-md border border-[#30363d] font-mono text-[13px] text-[#c9d1d9]">
-                      <div>Input: nums = [2,7,11,15], target = 9</div>
-                      <div>Output: [0,1]</div>
-                      <div className="text-[#8b949e] mt-2">Explanation: nums[0] + nums[1] = 2 + 7 = 9</div>
+                  {problem.examples.length > 0 && (
+                    <div>
+                      <p className="font-medium text-white text-[13px] mb-2">Example{problem.examples.length > 1 ? "s" : ""}</p>
+                      <div className="space-y-3">
+                        {problem.examples.map((ex, i) => (
+                          <div key={i} className="bg-[#1a1d23] p-4 rounded-md border border-[#30363d] font-mono text-[13px] text-[#c9d1d9]">
+                            <div>Input: {ex.input}</div>
+                            <div>Output: {ex.output}</div>
+                            {ex.explanation && <div className="text-[#8b949e] mt-2">Explanation: {ex.explanation}</div>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div>
                     <p className="font-medium text-white text-[13px] mb-2">Constraints</p>
                     <ul className="list-disc list-inside space-y-1 text-[#8b949e] text-[13px]">
-                      <li>2 ≤ nums.length ≤ 10⁴</li>
-                      <li>-10⁹ ≤ nums[i] ≤ 10⁹</li>
-                      <li>Only one valid answer exists</li>
+                      {problem.constraints.map((c, i) => (
+                        <li key={i}>{c}</li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -317,6 +369,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                 <Textarea
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
+                  onKeyDown={handleCodeTab}
                   className="w-full h-full bg-[#1a1d23] border border-[#30363d] text-[#c9d1d9] font-mono text-sm resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#0d1117] placeholder:text-[#6e7681]"
                   placeholder="Write your code here..."
                 />
@@ -335,7 +388,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCode(`function twoSum(nums, target) {\n  // Your code here\n}`)}
+                    onClick={() => setCode(getCodeTemplate(problem.id))}
                     className="h-8 border-[#30363d] text-[#c9d1d9] hover:bg-[#22262e] hover:text-white hover:border-[#3b3f4d]"
                   >
                     <RotateCcw className="mr-2 h-3.5 w-3.5" />
@@ -357,10 +410,11 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
 
                 <Button
                   onClick={handleEnd}
-                  className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white font-medium text-sm"
+                  disabled={loading}
+                  className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white font-medium text-sm disabled:opacity-70"
                 >
                   <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
-                  Submit Solution
+                  {loading ? "Generating feedback…" : "Submit Solution"}
                 </Button>
               </div>
             </div>
@@ -408,13 +462,19 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                   <Textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
+                    onKeyDown={handleNotesTab}
                     className="w-full h-full bg-[#1a1d23] border border-[#30363d] text-white resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#0d1117] placeholder:text-[#6e7681]"
                     placeholder="Write your thoughts, draw diagrams, plan your approach..."
                   />
                 </div>
 
-                <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] text-xs text-[#6e7681]">
-                  Auto-saved · Last updated just now
+                <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] flex items-center justify-between gap-2">
+                  <span className="text-xs text-[#6e7681]">Auto-saved · Last updated just now</span>
+                  {error && (
+                    <span className="text-xs text-red-400 truncate max-w-[60%]" title={error}>
+                      {error}
+                    </span>
+                  )}
                 </div>
               </div>
             </>

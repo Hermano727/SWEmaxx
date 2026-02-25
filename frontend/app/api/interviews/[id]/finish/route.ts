@@ -1,12 +1,29 @@
 import { NextResponse } from "next/server"
 import { getScorecardFromLLM } from "@/lib/interview/scorecardAdapter"
 import type { InterviewEvent } from "@/lib/interview/types"
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin"
 
 type FinishBody = {
   config?: { company?: string; [key: string]: unknown }
   code?: string
   notes?: string
   events?: InterviewEvent[]
+}
+
+async function getUidFromRequest(
+  request: Request
+): Promise<{ uid: string } | { error: "no_token" | "invalid_token" }> {
+  const authHeader = request.headers.get("Authorization")
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null
+  if (!token) return { error: "no_token" }
+  try {
+    const auth = getAdminAuth()
+    const decoded = await auth.verifyIdToken(token)
+    return { uid: decoded.uid }
+  } catch (e) {
+    console.warn("Finish route: verifyIdToken failed", e)
+    return { error: "invalid_token" }
+  }
 }
 
 export async function POST(
@@ -16,6 +33,43 @@ export async function POST(
   const { id } = await params
   if (!id) {
     return NextResponse.json({ error: "Missing interview id" }, { status: 400 })
+  }
+
+  let authResult: { uid: string } | { error: "no_token" | "invalid_token" }
+  try {
+    authResult = await getUidFromRequest(request)
+  } catch (e) {
+    console.error("Finish route: Firebase Admin init failed", e)
+    return NextResponse.json(
+      { error: "Server auth error. Ensure FIREBASE_SERVICE_ACCOUNT_KEY is set." },
+      { status: 503 }
+    )
+  }
+  if ("error" in authResult) {
+    const message =
+      authResult.error === "no_token"
+        ? "No auth token. Sign in and start the interview from the setup screen."
+        : "Invalid or expired token. Return to setup and sign in again."
+    return NextResponse.json({ error: message }, { status: 401 })
+  }
+  const uid = authResult.uid
+
+  try {
+    const db = getAdminFirestore()
+    const docSnap = await db.collection("interviews").doc(id).get()
+    if (!docSnap.exists) {
+      return NextResponse.json({ error: "Interview not found" }, { status: 404 })
+    }
+    const data = docSnap.data()
+    if (data?.userId !== uid) {
+      return NextResponse.json({ error: "Forbidden. You do not own this interview." }, { status: 403 })
+    }
+  } catch (e) {
+    console.error("Finish route: ownership check failed", e)
+    return NextResponse.json(
+      { error: "Server auth error. Ensure FIREBASE_SERVICE_ACCOUNT_KEY is set." },
+      { status: 503 }
+    )
   }
 
   let body: FinishBody

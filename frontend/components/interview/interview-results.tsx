@@ -1,33 +1,24 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle2, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Home } from "lucide-react"
-
-type Mistake = {
-  time: string
-  severity: "minor" | "major" | "critical"
-  message: string
-}
-
-export type InterviewResult = {
-  id?: string
-  company?: string
-  rating: "Strong Hire" | "Hire" | "No Hire"
-  score: number
-  strengths: string[]
-  weaknesses: string[]
-  mistakes: Mistake[]
-}
+import { CheckCircle2, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Home, History } from "lucide-react"
+import CompanyBadge from "@/app/profile/history/components/CompanyBadge"
+import type { InterviewResult, InterviewMistake } from "@/lib/interview/types"
+import {
+  formatMistakeTime,
+  formatSeverity,
+  formatPhaseOrCategory,
+} from "@/lib/interview/formatMistake"
 
 interface InterviewResultsProps {
   results: InterviewResult
-  onRetry: () => void
   onReturnHome: () => void
 }
 
-export default function InterviewResults({ results, onRetry, onReturnHome }: InterviewResultsProps) {
+export default function InterviewResults({ results, onReturnHome }: InterviewResultsProps) {
   const [mistakesExpanded, setMistakesExpanded] = useState(false)
   const [transcriptExpanded, setTranscriptExpanded] = useState(false)
 
@@ -37,14 +28,20 @@ export default function InterviewResults({ results, onRetry, onReturnHome }: Int
     return "text-[#f97373]"
   }
 
-  const getSeverityColor = (severity: Mistake["severity"]) => {
+  const getSeverityColor = (severity: InterviewMistake["severity"]) => {
     if (severity === "critical") return "text-[#f97373]"
     if (severity === "major") return "text-[#fbbf24]"
     return "text-[#46a758]"
   }
-
-  const companyName = results.company ?? "Google"
-  const companyInitial = companyName.charAt(0).toUpperCase()
+  const companySlug = (results.company ?? "google").toString().trim().toLowerCase()
+  const companyName =
+    companySlug === "google"
+      ? "Google"
+      : companySlug === "meta"
+        ? "Meta"
+        : companySlug === "amazon"
+          ? "Amazon"
+          : results.company ?? "Interview"
 
   return (
     <div className="min-h-screen bg-[#0d1117] pt-24 pb-16 px-4">
@@ -53,9 +50,7 @@ export default function InterviewResults({ results, onRetry, onReturnHome }: Int
         <div className="text-center mb-12">
           <h1 className={`text-5xl font-bold mb-4 ${getRatingColor(results.rating)}`}>{results.rating}</h1>
           <div className="flex items-center justify-center gap-3 mb-2">
-            <div className="w-12 h-12 rounded-lg bg-[#30363d] flex items-center justify-center text-white font-bold">
-              {companyInitial}
-            </div>
+            <CompanyBadge company={companySlug} size={48} />
             <span className="text-gray-400">{companyName} Interview</span>
           </div>
           <div className="text-4xl font-bold text-white">{results.score}/100</div>
@@ -124,15 +119,23 @@ export default function InterviewResults({ results, onRetry, onReturnHome }: Int
             {mistakesExpanded && (
               <CardContent>
                 <div className="space-y-3">
-                  {results.mistakes.map((mistake: any, index: number) => (
-                    <div key={index} className="p-3 bg-[#0d1117] border border-[#30363d] rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <span className="font-mono text-sm text-gray-500">{mistake.time}</span>
-                        <span className={`text-sm font-semibold ${getSeverityColor(mistake.severity)}`}>
-                          [{mistake.severity.toUpperCase()}]
+                  {results.mistakes.map((mistake, index) => (
+                    <div key={index} className="p-3 bg-[#0d1117] border border-[#30363d] rounded-lg space-y-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                        <span className="text-gray-500">{formatMistakeTime(mistake.time)}</span>
+                        <span className={`font-semibold ${getSeverityColor(mistake.severity)}`}>
+                          {formatSeverity(mistake.severity)}
                         </span>
-                        <span className="text-gray-300 flex-1">{mistake.message}</span>
+                        {(mistake.phase ?? mistake.category) && (
+                          <span className="text-gray-500">
+                            {[mistake.phase, mistake.category]
+                              .filter((s): s is string => Boolean(s))
+                              .map(formatPhaseOrCategory)
+                              .join(" · ")}
+                          </span>
+                        )}
                       </div>
+                      <p className="text-gray-300 text-sm leading-relaxed">{mistake.message}</p>
                     </div>
                   ))}
                 </div>
@@ -208,8 +211,11 @@ export default function InterviewResults({ results, onRetry, onReturnHome }: Int
           <Button variant="outline" onClick={onReturnHome} className="border-[#30363d] bg-transparent">
             Return to Setup
           </Button>
-          <Button onClick={onRetry} className="bg-[#46a758] hover:bg-[#3d8f4a] text-white">
-            Try Similar Problem
+          <Button asChild className="bg-[#46a758] hover:bg-[#3d8f4a] text-white">
+            <Link href="/profile/history">
+              <History className="mr-2 h-4 w-4" />
+              Go to user history
+            </Link>
           </Button>
         </div>
       </div>

@@ -4,7 +4,8 @@ import { useState } from "react"
 import OnboardingModal from "@/components/interview/onboarding-modal"
 import InterviewSetup from "@/components/interview/interview-setup"
 import InterviewScreen from "@/components/interview/interview-screen"
-import InterviewResults, { type InterviewResult } from "@/components/interview/interview-results"
+import InterviewResults from "@/components/interview/interview-results"
+import type { InterviewResult } from "@/lib/interview/types"
 import { Navbar } from "@/components/common/navbar"
 
 type FlowState = "onboarding" | "setup" | "interview" | "results"
@@ -55,11 +56,7 @@ export default function InterviewPage() {
       )}
 
       {flowState === "results" && interviewResults && (
-        <InterviewResults
-          results={interviewResults}
-          onRetry={() => setFlowState("interview")}
-          onReturnHome={handleReturnToSetup}
-        />
+        <InterviewResults results={interviewResults} onReturnHome={handleReturnToSetup} />
       )}
     </main>
   )
