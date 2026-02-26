@@ -1,30 +1,58 @@
-# SWEmaxxing frontend MVP
+# SWEmaxx
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+SWEmaxx is a personal engineering-growth platform designed to help users track,
+improve, and showcase their software engineering skills.  
+This repo is structured as a future-ready monorepo with a dedicated frontend and
+room for infra/auth expansion.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/hermanhundsberger-gmailcoms-projects/v0-swe-maxxing-frontend-mvp)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/l7zTKeVt6AL)
+## Tech Stack
 
-## Overview
+- Next.js 15 (App Router)
+- React 19
+- TypeScript
+- TailwindCSS
+- ShadCN UI
+- pnpm
+- Vercel Deployments
+- GitHub Actions CI
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+## Repository Structure
 
-## Deployment
+frontend/ Next.js web application (UI)
+infra/ Infrastructure-as-code (future)
+auth/ Auth functions, Supabase edge functions (future)
 
-Your project is live at:
 
-**[https://vercel.com/hermanhundsberger-gmailcoms-projects/v0-swe-maxxing-frontend-mvp](https://vercel.com/hermanhundsberger-gmailcoms-projects/v0-swe-maxxing-frontend-mvp)**
+## Development
 
-## Build your app
+### 1. Install dependencies
+cd frontend
+npm install
 
-Continue building your app on:
 
-**[https://v0.app/chat/l7zTKeVt6AL](https://v0.app/chat/l7zTKeVt6AL)**
+### 2. Environment Variables
+Copy:
+```bash
+cp frontend/.env.local.example frontend/.env.local
+```
+Fill in keys (Firebase, OpenAI, etc.). For **OpenAI** (interview scorecard), see [frontend/docs/OPENAI_SETUP.md](frontend/docs/OPENAI_SETUP.md).
 
-## How It Works
+### 3. Run Dev Server
+npm run dev
 
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+
+### 4. Lint + Type Check
+npm lint
+npm type-check
+
+
+## CI / Automation
+
+GitHub Actions:
+- Lint + Type Check on PR
+- Vercel Preview Deploys on PR
+- Required checks before merge into main
+
+## Contributing
+
+See **CONTRIBUTING.md** for branch rules, naming conventions, and commit standards.

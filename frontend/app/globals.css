@@ -1,0 +1,231 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Clean, LeetCode-inspired dark theme with muted greens */
+/* Updated dark theme with higher contrast background and removed neon effects */
+.dark {
+  --background: #0d1117;
+  --foreground: #f0f0f0;
+  --card: #1a1d23;
+  --card-foreground: #f0f0f0;
+  --popover: #1a1d23;
+  --popover-foreground: #f0f0f0;
+  --primary: #46a758;
+  --primary-foreground: #ffffff;
+  --secondary: #22262e;
+  --secondary-foreground: #f0f0f0;
+  --muted: #22262e;
+  --muted-foreground: #8b949e;
+  --accent: #14b8a6;
+  --accent-foreground: #f0f0f0;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --destructive: #e5484d;
+  --destructive-foreground: #ffffff;
+  --input: #22262e;
+  --ring: #46a758;
+  --chart-1: #46a758;
+  --chart-2: #3b82f6;
+  --chart-3: #a855f7;
+  --chart-4: #f59e0b;
+  --chart-5: #10b981;
+  --sidebar: #1a1d23;
+  --sidebar-foreground: #f0f0f0;
+  --sidebar-primary: #46a758;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #242830;
+  --sidebar-accent-foreground: #f0f0f0;
+  --sidebar-border: #3b3f4d;
+  --sidebar-ring: #46a758;
+}
+
+@theme inline {
+  --font-sans: "Geist", "Geist Fallback";
+  --font-mono: "Geist Mono", "Geist Mono Fallback";
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.scanlines {
+  position: relative;
+  overflow: hidden;
+}
+
+.neon-glow {
+  text-shadow: none;
+}
+
+.neon-border {
+  box-shadow: 0 0 0 1px currentColor, 0 0 8px currentColor;
+}
+
+@keyframes typing {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes blink {
+  50% {
+    border-color: transparent;
+  }
+}
+
+.typing-animation {
+  overflow: hidden;
+  border-right: 2px solid #00ff41;
+  white-space: nowrap;
+  animation: typing 3.5s steps(40, end), blink 0.75s step-end infinite;
+}
+
+/* Subtle, LeetCode-style scrollbars for problem + editor panels */
+.problem-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #3b3f4d transparent;
+}
+
+.problem-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.problem-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.problem-scroll::-webkit-scrollbar-thumb {
+  background-color: #3b3f4d;
+  border-radius: 999px;
+}
+
+.problem-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #46a758;
+}
+
+.code-editor-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #3b3f4d transparent;
+}
+
+.code-editor-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.code-editor-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.code-editor-scroll::-webkit-scrollbar-thumb {
+  background-color: #3b3f4d;
+  border-radius: 999px;
+}
+
+.code-editor-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #46a758;
+}
+
+/* Lightweight syntax highlighting for interview code editor */
+.code-keyword {
+  color: #c678dd;
+}
+
+.code-function {
+  color: #61afef;
+}
+
+.code-string {
+  color: #98c379;
+}
+
+.code-number {
+  color: #d19a66;
+}
+
+.code-comment {
+  color: #6a9955;
+  font-style: italic;
+}
