@@ -34,6 +34,16 @@ export const QUESTION_BANK: QuestionBankItem[] = [
         output: "[0,1]",
         explanation: "nums[0] + nums[1] = 2 + 7 = 9",
       },
+      {
+        input: "nums = [3,2,4], target = 6",
+        output: "[1,2]",
+        explanation: "nums[1] + nums[2] = 2 + 4 = 6",
+      },
+      {
+        input: "nums = [3,3], target = 6",
+        output: "[0,1]",
+        explanation: "nums[0] + nums[1] = 3 + 3 = 6",
+      },
     ],
     constraints: [
       "2 ≤ nums.length ≤ 10⁴",
@@ -79,6 +89,16 @@ export const QUESTION_BANK: QuestionBankItem[] = [
         output: "[7,0,8]",
         explanation: "342 + 465 = 807",
       },
+      {
+        input: "l1 = [0], l2 = [0]",
+        output: "[0]",
+        explanation: "0 + 0 = 0",
+      },
+      {
+        input: "l1 = [9,9,9,9,9,9,9], l2 = [9,9,9,9]",
+        output: "[8,9,9,9,0,0,0,1]",
+        explanation: "9999999 + 9999 = 10009998",
+      },
     ],
     constraints: [
       "The number of nodes in each linked list is in the range [1, 100].",
@@ -100,6 +120,7 @@ export const QUESTION_BANK: QuestionBankItem[] = [
     examples: [
       { input: "s = \"abcabcbb\"", output: "3", explanation: "The answer is \"abc\", with length 3." },
       { input: "s = \"bbbbb\"", output: "1", explanation: "The answer is \"b\", with length 1." },
+      { input: "s = \"pwwkew\"", output: "3", explanation: "The answer is \"wke\", with length 3." },
     ],
     constraints: [
       "0 ≤ s.length ≤ 5 * 10⁴",
@@ -120,6 +141,7 @@ export const QUESTION_BANK: QuestionBankItem[] = [
     examples: [
       { input: "nums1 = [1,3], nums2 = [2]", output: "2.00000", explanation: "merged array = [1,2,3] and median is 2." },
       { input: "nums1 = [1,2], nums2 = [3,4]", output: "2.50000", explanation: "merged array = [1,2,3,4] and median is (2 + 3) / 2 = 2.5." },
+      { input: "nums1 = [0,0], nums2 = [0,0]", output: "0.00000", explanation: "merged array = [0,0,0,0] and median is 0." },
     ],
     constraints: [
       "nums1.length == m",

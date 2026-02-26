@@ -24,6 +24,7 @@ import { getCurrentIdToken } from "@/lib/firebase/auth"
 import type { InterviewResult, InterviewEvent } from "@/lib/interview/types"
 import { getCodeTemplate, SUPPORTED_EDITOR_LANGUAGES, DEFAULT_EDITOR_LANGUAGE } from "@/lib/constants/questions"
 import type { QuestionBankItem, EditorLanguage } from "@/lib/constants/questions"
+import { companyAllowsExamples } from "@/lib/constants/companies"
 
 interface InterviewScreenProps {
   config: any
@@ -78,6 +79,7 @@ const defaultQuestion: QuestionBankItem = {
 export default function InterviewScreen({ config, onFinish, onExit }: InterviewScreenProps) {
   const problem: QuestionBankItem = config?.problem ?? defaultQuestion
   const hints = problem.hints ?? []
+  const showExamples = companyAllowsExamples(config?.company)
   const initialCode = getCodeTemplate(problem.id, DEFAULT_EDITOR_LANGUAGE)
   const [timeRemaining, setTimeRemaining] = useState(45 * 60)
   const [code, setCode] = useState(initialCode)
@@ -107,7 +109,6 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     status: QuestionStatus
   }
 
-  const [rightPanelTab, setRightPanelTab] = useState<"notes" | "ask">("notes")
   const [questions, setQuestions] = useState<AskedQuestion[]>([])
   const [askInput, setAskInput] = useState("")
   const [askLoadingId, setAskLoadingId] = useState<string | null>(null)
@@ -425,7 +426,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                 <div className="text-[#e6edf3] space-y-4 text-sm leading-relaxed">
                   <p>{problem.description}</p>
 
-                  {problem.examples.length > 0 && (
+                  {showExamples && problem.examples.length > 0 && (
                     <div>
                       <p className="font-medium text-white text-[13px] mb-2">Example{problem.examples.length > 1 ? "s" : ""}</p>
                       <div className="space-y-3">
@@ -543,33 +544,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
             <>
               <div className="flex flex-col bg-[#0d1117] min-h-0">
                 <div className="flex items-center justify-between px-4 py-3 bg-[#1a1d23] border-b border-[#30363d]">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-semibold text-white tracking-tight">Interview brain</h2>
-                    <div className="inline-flex items-center gap-1 rounded-full bg-[#0d1117] border border-[#30363d] p-1">
-                      <button
-                        type="button"
-                        onClick={() => setRightPanelTab("notes")}
-                        className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                          rightPanelTab === "notes"
-                            ? "bg-[#22262e] text-white"
-                            : "text-[#8b949e] hover:text-white hover:bg-[#22262e]"
-                        }`}
-                      >
-                        Notes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRightPanelTab("ask")}
-                        className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                          rightPanelTab === "ask"
-                            ? "bg-[#22262e] text-white"
-                            : "text-[#8b949e] hover:text-white hover:bg-[#22262e]"
-                        }`}
-                      >
-                        Ask interviewer
-                      </button>
-                    </div>
-                  </div>
+                  <h2 className="text-sm font-semibold text-white tracking-tight">Interview brain</h2>
                   <button
                     onClick={() => setRightPanelCollapsed(true)}
                     className="rounded-md p-2 text-[#8b949e] hover:text-white hover:bg-[#22262e] transition-colors"
@@ -581,80 +556,82 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                 </div>
 
                 <div className="flex-1 flex flex-col min-h-0 bg-[#0d1117]">
-                  {rightPanelTab === "notes" ? (
-                    <div className="flex-1 p-4 min-h-0">
+                  {/* Top: Ask interviewer */}
+                  <div className="flex-[3] min-h-0 p-4 pb-2 flex flex-col gap-3">
+                    <div className="rounded-md border border-[#30363d] bg-[#1a1d23] p-3">
+                      <p className="text-xs text-[#8b949e] mb-2">
+                        Ask short clarifying questions like you would with a real interviewer.{" "}
+                        <span className="text-[#c9d1d9] font-medium">Up to 3 questions</span> per interview.
+                      </p>
+                      <Textarea
+                        value={askInput}
+                        onChange={(e) => setAskInput(e.target.value)}
+                        rows={3}
+                        className="w-full bg-[#0d1117] border border-[#30363d] text-sm text-white resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#1a1d23] placeholder:text-[#6e7681]"
+                        placeholder="Example: “Can I assume the array is sorted?”"
+                      />
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <span className="text-[11px] text-[#6e7681]">
+                          {Math.max(0, 3 - questions.filter((q) => q.status !== "error").length)} questions remaining
+                        </span>
+                        <Button
+                          size="sm"
+                          onClick={handleAskSubmit}
+                          disabled={!askInput.trim() || !!askLoadingId || !sessionId}
+                          className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white text-xs px-3"
+                        >
+                          {askLoadingId ? "Asking…" : "Ask interviewer"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-h-0 rounded-md border border-[#30363d] bg-[#0d1117] p-3 overflow-y-auto space-y-3 problem-scroll">
+                      {questions.length === 0 ? (
+                        <p className="text-xs text-[#6e7681]">
+                          No questions yet. Use this space to clarify constraints, edge cases, or expectations.
+                        </p>
+                      ) : (
+                        questions.map((q) => (
+                          <div key={q.id} className="space-y-1">
+                            <p className="text-xs font-medium text-[#e6edf3]">You</p>
+                            <p className="text-xs text-[#c9d1d9]">{q.text}</p>
+                            <p className="mt-1 text-[11px] font-medium text-[#8b949e]">Interviewer</p>
+                            {q.status === "pending" && (
+                              <p className="text-xs text-[#6e7681]">Thinking…</p>
+                            )}
+                            {q.status === "answered" && (
+                              <p className="text-xs text-[#e6edf3] leading-relaxed">{q.answer}</p>
+                            )}
+                            {q.status === "error" && (
+                              <p className="text-xs text-red-400">Could not fetch an answer. Try again.</p>
+                            )}
+                            <div className="h-px bg-[#30363d] mt-2" />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom: Notes */}
+                  <div className="flex-[2] min-h-0 border-t border-[#30363d] bg-[#0d1117] flex flex-col">
+                    <div className="px-4 pt-3 pb-2">
+                      <p className="text-xs font-medium text-[#c9d1d9] mb-2">Notes</p>
                       <Textarea
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         onKeyDown={handleNotesTab}
-                        className="w-full h-full bg-[#1a1d23] border border-[#30363d] text-white resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#0d1117] placeholder:text-[#6e7681]"
+                        className="w-full h-28 bg-[#1a1d23] border border-[#30363d] text-white resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#0d1117] placeholder:text-[#6e7681]"
                         placeholder="Write your thoughts, draw diagrams, plan your approach..."
                       />
                     </div>
-                  ) : (
-                    <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
-                      <div className="rounded-md border border-[#30363d] bg-[#1a1d23] p-3">
-                        <p className="text-xs text-[#8b949e] mb-2">
-                          Ask short clarifying questions like you would with a real interviewer.{" "}
-                          <span className="text-[#c9d1d9] font-medium">Up to 3 questions</span> per interview.
-                        </p>
-                        <Textarea
-                          value={askInput}
-                          onChange={(e) => setAskInput(e.target.value)}
-                          rows={3}
-                          className="w-full bg-[#0d1117] border border-[#30363d] text-sm text-white resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#1a1d23] placeholder:text-[#6e7681]"
-                          placeholder="Example: “Can I assume the array is sorted?”"
-                        />
-                        <div className="mt-2 flex items-center justify-between gap-3">
-                          <span className="text-[11px] text-[#6e7681]">
-                            {Math.max(0, 3 - questions.filter((q) => q.status !== "error").length)} questions remaining
-                          </span>
-                          <Button
-                            size="sm"
-                            onClick={handleAskSubmit}
-                            disabled={!askInput.trim() || !!askLoadingId || !sessionId}
-                            className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white text-xs px-3"
-                          >
-                            {askLoadingId ? "Asking…" : "Ask interviewer"}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 min-h-0 rounded-md border border-[#30363d] bg-[#0d1117] p-3 overflow-y-auto space-y-3 problem-scroll">
-                        {questions.length === 0 ? (
-                          <p className="text-xs text-[#6e7681]">
-                            No questions yet. Use this space to clarify constraints, edge cases, or expectations.
-                          </p>
-                        ) : (
-                          questions.map((q) => (
-                            <div key={q.id} className="space-y-1">
-                              <p className="text-xs font-medium text-[#e6edf3]">You</p>
-                              <p className="text-xs text-[#c9d1d9]">{q.text}</p>
-                              <p className="mt-1 text-[11px] font-medium text-[#8b949e]">Interviewer</p>
-                              {q.status === "pending" && (
-                                <p className="text-xs text-[#6e7681]">Thinking…</p>
-                              )}
-                              {q.status === "answered" && (
-                                <p className="text-xs text-[#e6edf3] leading-relaxed">{q.answer}</p>
-                              )}
-                              {q.status === "error" && (
-                                <p className="text-xs text-red-400">Could not fetch an answer. Try again.</p>
-                              )}
-                              <div className="h-px bg-[#30363d] mt-2" />
-                            </div>
-                          ))
-                        )}
-                      </div>
+                    <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] flex items-center justify-between gap-2">
+                      <span className="text-xs text-[#6e7681]">Auto-saved · Last updated just now</span>
+                      {error && (
+                        <span className="text-xs text-red-400 truncate max-w-[60%]" title={error}>
+                          {error}
+                        </span>
+                      )}
                     </div>
-                  )}
-
-                  <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] flex items-center justify-between gap-2">
-                    <span className="text-xs text-[#6e7681]">Auto-saved · Last updated just now</span>
-                    {error && (
-                      <span className="text-xs text-red-400 truncate max-w-[60%]" title={error}>
-                        {error}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
