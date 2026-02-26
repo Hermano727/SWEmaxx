@@ -4,7 +4,12 @@ import type { InterviewEvent } from "@/lib/interview/types"
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin"
 
 type FinishBody = {
-  config?: { company?: string; [key: string]: unknown }
+  config?: {
+    company?: string
+    problemTitle?: string
+    problem?: { title?: string; [key: string]: unknown }
+    [key: string]: unknown
+  }
   code?: string
   notes?: string
   events?: InterviewEvent[]
@@ -81,12 +86,19 @@ export async function POST(
 
   const config = body.config ?? {}
   const company = (config.company as string) ?? "google"
+  const problem =
+    typeof config.problemTitle === "string" && config.problemTitle.trim() !== ""
+      ? config.problemTitle.trim()
+      : typeof config.problem?.title === "string" && config.problem.title.trim() !== ""
+        ? config.problem.title.trim()
+        : undefined
   const code = typeof body.code === "string" ? body.code : ""
   const notes = typeof body.notes === "string" ? body.notes : ""
   const events = Array.isArray(body.events) ? body.events : []
 
   const scorecard = await getScorecardFromLLM({
     company,
+    problem,
     code,
     notes,
     events,

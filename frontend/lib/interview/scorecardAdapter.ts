@@ -85,9 +85,13 @@ Respond with a JSON object only (no markdown, no code block). Required shape:
   "mistakes": [{ "time": string, "severity": "minor"|"major"|"critical", "phase": string, "category": string, "message": string }]
 }`
 
-  const userPrompt = `Company: ${input.company}
+  const problemBlock =
+    input.problem != null && input.problem.trim() !== ""
+      ? `Problem (candidate was given this):\n${input.problem}\n\n`
+      : ""
 
-Candidate notes during interview:
+  const userPrompt = `Company: ${input.company}
+${problemBlock}Candidate notes during interview:
 ${input.notes || "(none)"}
 
 Final code submitted:

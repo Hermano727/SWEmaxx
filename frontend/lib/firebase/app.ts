@@ -9,9 +9,12 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-// Returns an initialized Firebase App for browser (client) usage.
-// This avoids initializing Firebase during SSR/build because the
-// initialization is guarded by `typeof window`.
+/**
+ * Returns an initialized Firebase App for browser (client) usage only.
+ * Returns null when run on the server (SSR/build); callers must check for null
+ * and only use this in browser contexts (e.g. after mount or in event handlers).
+ * Using the result without a null check in SSR can cause runtime errors.
+ */
 export function getAppClient() {
   if (typeof window === "undefined") return null
   return getApps().length ? getApp() : initializeApp(firebaseConfig)

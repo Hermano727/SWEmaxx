@@ -37,7 +37,7 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
   const [hintsEnabled, setHintsEnabled] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [interviewDocId, setInterviewDocId] = useState<string | null>(null)
-  const [loading, setloading] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
 
   async function handleStart() {
     setError(null)
-    setloading(true)
+    setLoading(true)
     try {
       const uid = await ensureSignedIn()
       const question = pickRandomQuestion(difficulty as "random" | Difficulty)
@@ -72,7 +72,7 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
       }
       const docId = await recordInterviewStart(uid, meta, "web")
       setInterviewDocId(docId)
-      setloading(false)
+      setLoading(false)
       onStart({
         company: selectedCompany,
         mode: interviewMode,
@@ -85,7 +85,7 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
       })
     } catch (e: any) {
       setError(e.message || "Failed to start interview")
-      setloading(false)
+      setLoading(false)
     }
   }
 
