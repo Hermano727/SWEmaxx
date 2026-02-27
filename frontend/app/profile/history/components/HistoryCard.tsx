@@ -11,6 +11,7 @@ import {
   formatSeverity,
   formatPhaseOrCategory,
 } from "@/lib/interview/formatMistake"
+import { getCurrentIdToken } from "@/lib/firebase/auth"
 
 export type HistoryItem = {
   id?: string
@@ -49,6 +50,11 @@ function isScorecardResult(r: unknown): r is InterviewResult {
 export default function HistoryCard({ item }: { item: HistoryItem }) {
   const [popupOpen, setPopupOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
+  const [transcriptLoading, setTranscriptLoading] = useState(false)
+  const [transcriptError, setTranscriptError] = useState<string | null>(null)
+  const [transcriptChunks, setTranscriptChunks] = useState<
+    { id: string; offsetSeconds: number | null; text: string }[]
+  >([])
 
   const displayDate =
     item.date ??
@@ -92,6 +98,78 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
     return () => document.removeEventListener("keydown", handleEscape)
   }, [popupOpen])
 
+  useEffect(() => {
+    if (!popupOpen || !item.id) return
+
+    let cancelled = false
+    const loadTranscript = async () => {
+      try {
+        setTranscriptLoading(true)
+        setTranscriptError(null)
+
+        const token = await getCurrentIdToken()
+        if (!token) {
+          if (!cancelled) {
+            setTranscriptError("Sign in again to view this transcript.")
+          }
+          return
+        }
+
+        const res = await fetch(`/api/interviews/${item.id}/transcript`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          const message =
+            (data.error as string) ||
+            "Could not load transcript for this interview."
+          if (!cancelled) {
+            setTranscriptError(message)
+          }
+          return
+        }
+
+        const data = (await res.json()) as {
+          chunks?: {
+            id: string
+            sequence: number
+            text: string
+            offsetSeconds: number | null
+          }[]
+        }
+
+        if (!cancelled) {
+          setTranscriptChunks(
+            (data.chunks ?? [])
+              .filter((c) => typeof c.text === "string" && c.text.trim() !== "")
+              .map((c) => ({
+                id: c.id,
+                offsetSeconds: c.offsetSeconds,
+                text: c.text.trim(),
+              }))
+          )
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setTranscriptError("Failed to load transcript.")
+        }
+      } finally {
+        if (!cancelled) {
+          setTranscriptLoading(false)
+        }
+      }
+    }
+
+    void loadTranscript()
+
+    return () => {
+      cancelled = true
+    }
+  }, [popupOpen, item.id])
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
       setPopupOpen(false)
@@ -108,6 +186,16 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
     if (severity === "critical") return "text-destructive"
     if (severity === "major") return "text-amber-600 dark:text-amber-500"
     return "text-muted-foreground"
+  }
+
+  const formatOffsetTime = (seconds: number | null): string => {
+    if (seconds == null || Number.isNaN(seconds)) return "--:--"
+    const s = Math.max(0, Math.round(seconds))
+    const m = Math.floor(s / 60)
+    const r = s % 60
+    const mm = m.toString().padStart(2, "0")
+    const rr = r.toString().padStart(2, "0")
+    return `${mm}:${rr}`
   }
 
   return (
@@ -300,6 +388,40 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
                   </span>
                 </div>
               )}
+
+              <div className="pt-4 border-t border-border space-y-2">
+                <h3 className="text-sm font-semibold text-foreground flex items-center justify-between">
+                  <span>Transcript</span>
+                  {transcriptLoading && (
+                    <span className="text-xs text-muted-foreground">Loading…</span>
+                  )}
+                </h3>
+                {transcriptError && (
+                  <p className="text-xs text-destructive">{transcriptError}</p>
+                )}
+                {!transcriptError && !transcriptLoading && transcriptChunks.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No transcript available for this interview yet.
+                  </p>
+                )}
+                {transcriptChunks.length > 0 && (
+                  <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-muted/40 p-3 space-y-2 text-sm">
+                    {transcriptChunks.map((chunk) => (
+                      <div
+                        key={chunk.id}
+                        className="flex items-start gap-3 text-muted-foreground"
+                      >
+                        <span className="shrink-0 text-xs font-mono text-muted-foreground/80">
+                          {formatOffsetTime(chunk.offsetSeconds)}
+                        </span>
+                        <p className="text-sm leading-relaxed text-foreground/90">
+                          {chunk.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

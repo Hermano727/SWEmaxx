@@ -11,6 +11,7 @@ import {
   Lightbulb,
   CheckCircle2,
   AlertCircle,
+  Mic,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -25,6 +26,7 @@ import type { InterviewResult, InterviewEvent } from "@/lib/interview/types"
 import { getCodeTemplate, SUPPORTED_EDITOR_LANGUAGES, DEFAULT_EDITOR_LANGUAGE } from "@/lib/constants/questions"
 import type { QuestionBankItem, EditorLanguage } from "@/lib/constants/questions"
 import { companyAllowsExamples } from "@/lib/constants/companies"
+import { useContinuousTranscriptCapture } from "@/lib/interview/useContinuousTranscriptCapture"
 
 interface InterviewScreenProps {
   config: any
@@ -175,6 +177,24 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   }
 
   const sessionId: string | undefined = config?.sessionId ?? interviewDocId ?? undefined
+
+  const interviewerMode: "silent" | "ask_box" | "active" =
+    config?.interviewerMode === "ask_box" || config?.interviewerMode === "active"
+      ? config.interviewerMode
+      : "silent"
+
+  const { isSupported: micSupported, isRecording: micRecording, error: micError } =
+    useContinuousTranscriptCapture({
+      sessionId,
+      enabled: Boolean(sessionId),
+      mode:
+        interviewerMode === "active"
+          ? "active_interviewer_context"
+          : "silent",
+      company: config?.company,
+      problemId: problem.id,
+      problemTitle: problem.title,
+    })
 
   const sendEvent = async (event: Omit<InterviewEvent, "sessionId">) => {
     if (!sessionId) return
@@ -574,14 +594,26 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                         <span className="text-[11px] text-[#6e7681]">
                           {Math.max(0, 3 - questions.filter((q) => q.status !== "error").length)} questions remaining
                         </span>
-                        <Button
-                          size="sm"
-                          onClick={handleAskSubmit}
-                          disabled={!askInput.trim() || !!askLoadingId || !sessionId}
-                          className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white text-xs px-3"
-                        >
-                          {askLoadingId ? "Asking…" : "Ask interviewer"}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            disabled
+                            className="h-8 w-8 border-[#30363d] text-[#6e7681] hover:text-[#c9d1d9] hover:bg-[#22262e]"
+                            title="Use your mic to fill this box (coming soon)"
+                          >
+                            <Mic className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={handleAskSubmit}
+                            disabled={!askInput.trim() || !!askLoadingId || !sessionId}
+                            className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white text-xs px-3"
+                          >
+                            {askLoadingId ? "Asking…" : "Ask interviewer"}
+                          </Button>
+                        </div>
                       </div>
                     </div>
 
@@ -625,10 +657,20 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                       />
                     </div>
                     <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] flex items-center justify-between gap-2">
-                      <span className="text-xs text-[#6e7681]">Auto-saved · Last updated just now</span>
-                      {error && (
-                        <span className="text-xs text-red-400 truncate max-w-[60%]" title={error}>
-                          {error}
+                      <span className="text-xs text-[#6e7681]">
+                        Auto-saved ·{" "}
+                        {micSupported
+                          ? micRecording
+                            ? "Listening for voice notes"
+                            : "Mic ready"
+                          : "Voice capture unavailable"}
+                      </span>
+                      {(error || micError) && (
+                        <span
+                          className="text-xs text-red-400 truncate max-w-[60%]"
+                          title={error ?? micError ?? undefined}
+                        >
+                          {error ?? micError}
                         </span>
                       )}
                     </div>

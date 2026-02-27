@@ -12,13 +12,13 @@ function getAdminApp(): admin.app.App {
   if (key) {
     try {
       const cert = JSON.parse(key) as admin.ServiceAccount
+      console.log("Firebase Admin projectId:", cert.project_id)
       return admin.initializeApp({ credential: admin.credential.cert(cert) })
     } catch (e) {
       console.error("Invalid FIREBASE_SERVICE_ACCOUNT_KEY:", e)
       throw new Error("Firebase Admin: invalid FIREBASE_SERVICE_ACCOUNT_KEY")
     }
   }
-  return admin.initializeApp({ credential: admin.credential.applicationDefault() })
 }
 
 export function getAdminAuth(): admin.auth.Auth {

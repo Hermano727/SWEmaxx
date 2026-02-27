@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getScorecardFromLLM } from "@/lib/interview/scorecardAdapter"
 import type { InterviewEvent } from "@/lib/interview/types"
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin"
+import { getTranscriptTextForInterview } from "@/lib/db/postgres"
 
 type FinishBody = {
   config?: {
@@ -96,11 +97,22 @@ export async function POST(
   const notes = typeof body.notes === "string" ? body.notes : ""
   const events = Array.isArray(body.events) ? body.events : []
 
+  let transcriptText = ""
+  if (process.env.DATABASE_URL) {
+    try {
+      transcriptText = await getTranscriptTextForInterview(id)
+    } catch (e) {
+      console.error("Finish route: failed to load transcript text", e)
+    }
+  }
+
+  const combinedNotes = buildCombinedNotes(notes, transcriptText)
+
   const scorecard = await getScorecardFromLLM({
     company,
     problem,
     code,
-    notes,
+    notes: combinedNotes,
     events,
   })
 
@@ -112,4 +124,19 @@ export async function POST(
   }
 
   return NextResponse.json({ scorecard })
+}
+
+function buildCombinedNotes(typedNotes: string, transcript: string): string {
+  const cleanTyped = (typedNotes || "").trim()
+  const cleanTranscript = (transcript || "").trim()
+
+  if (cleanTyped && cleanTranscript) {
+    return `Candidate spoken transcript:\n${cleanTranscript}\n\nTyped notes:\n${cleanTyped}`
+  }
+
+  if (cleanTranscript) {
+    return `Candidate spoken transcript:\n${cleanTranscript}`
+  }
+
+  return cleanTyped
 }
