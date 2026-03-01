@@ -6,6 +6,7 @@ import {
   TranscriptSource,
   upsertInterviewRow,
 } from "@/lib/db/postgres"
+import type { InterviewPhase } from "@/lib/interview/types"
 
 type ChunkBody = {
   text?: string
@@ -14,6 +15,7 @@ type ChunkBody = {
   company?: string
   problemId?: string
   problemTitle?: string
+  phase?: InterviewPhase
 }
 
 type AuthError = "no_token" | "invalid_token"

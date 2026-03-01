@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle2, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Home, History } from "lucide-react"
 import CompanyBadge from "@/app/profile/history/components/CompanyBadge"
 import type { InterviewResult, InterviewMistake } from "@/lib/interview/types"
+import { getCurrentIdToken } from "@/lib/firebase/auth"
 import {
   formatMistakeTime,
   formatSeverity,
@@ -21,6 +22,9 @@ interface InterviewResultsProps {
 export default function InterviewResults({ results, onReturnHome }: InterviewResultsProps) {
   const [mistakesExpanded, setMistakesExpanded] = useState(false)
   const [transcriptExpanded, setTranscriptExpanded] = useState(false)
+  const [transcriptLoading, setTranscriptLoading] = useState(false)
+  const [transcriptError, setTranscriptError] = useState<string | null>(null)
+  const [transcriptLines, setTranscriptLines] = useState<string[] | null>(null)
 
   const getRatingColor = (rating: InterviewResult["rating"]) => {
     if (rating === "Strong Hire") return "text-[#46a758]"
@@ -42,6 +46,75 @@ export default function InterviewResults({ results, onReturnHome }: InterviewRes
         : companySlug === "amazon"
           ? "Amazon"
           : results.company ?? "Interview"
+
+  useEffect(() => {
+    const interviewId = results.id
+    if (!transcriptExpanded || !interviewId) return
+
+    let cancelled = false
+
+    const fetchTranscript = async () => {
+      setTranscriptLoading(true)
+      setTranscriptError(null)
+      try {
+        const token = await getCurrentIdToken()
+        if (!token) {
+          throw new Error(
+            "You’re not signed in. Return to setup and sign in, then view this interview again."
+          )
+        }
+
+        const res = await fetch(`/api/interviews/${interviewId}/transcript`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error((data.error as string) || "Failed to load transcript.")
+        }
+
+        const data = (await res.json()) as {
+          chunks: Array<{
+            text: string
+            source: "user" | "interviewer_ai"
+            offsetSeconds: number | null
+          }>
+        }
+
+        if (cancelled) return
+
+        const lines = data.chunks.map((chunk) => {
+          const seconds = chunk.offsetSeconds ?? 0
+          const mins = Math.floor(seconds / 60)
+          const secs = seconds % 60
+          const timeLabel = `[${mins.toString().padStart(2, "0")}:${secs
+            .toString()
+            .padStart(2, "0")}]`
+          const speaker = chunk.source === "interviewer_ai" ? "Interviewer" : "User"
+          return `${timeLabel} ${speaker}: ${chunk.text}`
+        })
+
+        setTranscriptLines(lines)
+      } catch (e) {
+        if (cancelled) return
+        const message =
+          e instanceof Error ? e.message : "Something went wrong loading the transcript."
+        setTranscriptError(message)
+      } finally {
+        if (!cancelled) {
+          setTranscriptLoading(false)
+        }
+      }
+    }
+
+    void fetchTranscript()
+
+    return () => {
+      cancelled = true
+    }
+  }, [transcriptExpanded, results.id])
 
   return (
     <div className="min-h-screen bg-[#0d1117] pt-24 pb-16 px-4">
@@ -160,13 +233,20 @@ export default function InterviewResults({ results, onReturnHome }: InterviewRes
             </CardHeader>
             {transcriptExpanded && (
               <CardContent>
-                <div className="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg font-mono text-sm text-gray-400">
-                  <p>[00:00] Interview started</p>
-                  <p>[00:15] User: "So this is a Two Sum problem..."</p>
-                  <p>[01:30] User began coding solution</p>
-                  <p className="text-yellow-500">[12:34] Mistake detected: syntax error</p>
-                  <p>[15:00] User: "Let me optimize this approach..."</p>
-                  <p>[42:00] Solution submitted</p>
+                <div className="p-4 bg-[#0d1117] border border-[#30363d] rounded-lg font-mono text-sm text-gray-400 whitespace-pre-wrap">
+                  {transcriptLoading && <p>Loading transcript…</p>}
+                  {!transcriptLoading && transcriptError && (
+                    <p className="text-red-400">{transcriptError}</p>
+                  )}
+                  {!transcriptLoading && !transcriptError && transcriptLines && (
+                    <>
+                      {transcriptLines.length === 0 ? (
+                        <p>No transcript was captured for this interview.</p>
+                      ) : (
+                        transcriptLines.map((line, idx) => <p key={idx}>{line}</p>)
+                      )}
+                    </>
+                  )}
                 </div>
               </CardContent>
             )}

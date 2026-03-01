@@ -55,6 +55,15 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
   const [transcriptChunks, setTranscriptChunks] = useState<
     { id: string; offsetSeconds: number | null; text: string }[]
   >([])
+  const [interviewerMessages, setInterviewerMessages] = useState<
+    {
+      id: string
+      role: "user" | "assistant"
+      messageType: "question" | "hint" | "nudged_feedback"
+      text: string
+      offsetSeconds: number | null
+    }[]
+  >([])
 
   const displayDate =
     item.date ??
@@ -139,6 +148,14 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
             text: string
             offsetSeconds: number | null
           }[]
+          messages?: {
+            id: string
+            role: "user" | "assistant"
+            messageType: "question" | "hint" | "nudged_feedback"
+            text: string
+            createdAt: string
+            offsetSeconds: number | null
+          }[]
         }
 
         if (!cancelled) {
@@ -150,6 +167,15 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
                 offsetSeconds: c.offsetSeconds,
                 text: c.text.trim(),
               }))
+          )
+
+          setInterviewerMessages(
+            (data.messages ?? []).filter(
+              (m) =>
+                m.role === "assistant" &&
+                typeof m.text === "string" &&
+                m.text.trim() !== ""
+            )
           )
         }
       } catch (e) {
@@ -389,38 +415,75 @@ export default function HistoryCard({ item }: { item: HistoryItem }) {
                 </div>
               )}
 
-              <div className="pt-4 border-t border-border space-y-2">
-                <h3 className="text-sm font-semibold text-foreground flex items-center justify-between">
-                  <span>Transcript</span>
-                  {transcriptLoading && (
-                    <span className="text-xs text-muted-foreground">Loading…</span>
+              <div className="pt-4 border-t border-border space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center justify-between">
+                    <span>Transcript</span>
+                    {transcriptLoading && (
+                      <span className="text-xs text-muted-foreground">Loading…</span>
+                    )}
+                  </h3>
+                  {transcriptError && (
+                    <p className="text-xs text-destructive">{transcriptError}</p>
                   )}
-                </h3>
-                {transcriptError && (
-                  <p className="text-xs text-destructive">{transcriptError}</p>
-                )}
-                {!transcriptError && !transcriptLoading && transcriptChunks.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    No transcript available for this interview yet.
-                  </p>
-                )}
-                {transcriptChunks.length > 0 && (
-                  <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-muted/40 p-3 space-y-2 text-sm">
-                    {transcriptChunks.map((chunk) => (
-                      <div
-                        key={chunk.id}
-                        className="flex items-start gap-3 text-muted-foreground"
-                      >
-                        <span className="shrink-0 text-xs font-mono text-muted-foreground/80">
-                          {formatOffsetTime(chunk.offsetSeconds)}
-                        </span>
-                        <p className="text-sm leading-relaxed text-foreground/90">
-                          {chunk.text}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  {!transcriptError && !transcriptLoading && transcriptChunks.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No transcript available for this interview yet.
+                    </p>
+                  )}
+                  {transcriptChunks.length > 0 && (
+                    <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-muted/40 p-3 space-y-2 text-sm">
+                      {transcriptChunks.map((chunk) => (
+                        <div
+                          key={chunk.id}
+                          className="flex items-start gap-3 text-muted-foreground"
+                        >
+                          <span className="shrink-0 text-xs font-mono text-muted-foreground/80">
+                            {formatOffsetTime(chunk.offsetSeconds)}
+                          </span>
+                          <p className="text-sm leading-relaxed text-foreground/90">
+                            {chunk.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2 border-t border-border pt-3">
+                  <h3 className="text-sm font-semibold text-foreground">Interviewer prompts</h3>
+                  {interviewerMessages.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No interviewer prompts were recorded for this interview.
+                    </p>
+                  )}
+                  {interviewerMessages.length > 0 && (
+                    <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/40 p-3 space-y-2 text-sm">
+                      {interviewerMessages.map((m) => (
+                        <div
+                          key={m.id}
+                          className="flex items-start gap-3 text-muted-foreground"
+                        >
+                          <span className="shrink-0 text-xs font-mono text-muted-foreground/80">
+                            {formatOffsetTime(m.offsetSeconds)}
+                          </span>
+                          <div className="space-y-1">
+                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                              {m.messageType === "question"
+                                ? "Question"
+                                : m.messageType === "hint"
+                                  ? "Hint"
+                                  : "Feedback"}
+                            </div>
+                            <p className="text-sm leading-relaxed text-foreground/90">
+                              {m.text}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

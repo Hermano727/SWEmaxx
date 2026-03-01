@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin"
-import { getTranscriptChunksForInterview } from "@/lib/db/postgres"
+import {
+  getTranscriptChunksForInterview,
+  getInterviewMessagesForInterview,
+} from "@/lib/db/postgres"
 
 type AuthError = "no_token" | "invalid_token"
 
@@ -24,7 +27,11 @@ async function assertInterviewOwnership(
   interviewId: string,
   uid: string
 ): Promise<
-  | { ok: true; startedAtMs: number | null; endedAtMs: number | null }
+  | {
+      ok: true
+      startedAtMs: number | null
+      endedAtMs: number | null
+    }
   | { error: string; status: number }
 > {
   try {
@@ -111,14 +118,15 @@ export async function GET(
   }
 
   try {
-    const chunks = await getTranscriptChunksForInterview(id)
+    const [chunks, messages] = await Promise.all([
+      getTranscriptChunksForInterview(id),
+      getInterviewMessagesForInterview(id),
+    ])
 
-    const startedAtMs =
-      "ok" in ownership && ownership.ok ? ownership.startedAtMs : null
-    const endedAtMs =
-      "ok" in ownership && ownership.ok ? ownership.endedAtMs : null
+    const startedAtMs = ownership.ok ? ownership.startedAtMs : null
+    const endedAtMs = ownership.ok ? ownership.endedAtMs : null
 
-    const withOffsets = chunks.map((chunk) => {
+    const chunkWithOffsets = chunks.map((chunk) => {
       let offsetSeconds: number | null = null
       if (startedAtMs != null) {
         const createdMs = Date.parse(chunk.createdAt)
@@ -133,19 +141,40 @@ export async function GET(
       }
     })
 
-    const fullText = withOffsets.map((c) => c.text).join("\n")
+    const fullText = chunkWithOffsets.map((c) => c.text).join("\n")
 
     const durationSeconds =
       startedAtMs != null && endedAtMs != null
         ? Math.max(0, Math.round((endedAtMs - startedAtMs) / 1000))
         : null
 
+    const messageWithOffsets = messages.map((m) => {
+      let offsetSeconds: number | null = null
+      if (startedAtMs != null) {
+        const createdMs = Date.parse(m.createdAt)
+        if (!Number.isNaN(createdMs)) {
+          const diff = Math.max(0, Math.round((createdMs - startedAtMs) / 1000))
+          offsetSeconds = diff
+        }
+      }
+
+      return {
+        id: m.id,
+        role: m.role,
+        messageType: m.messageType,
+        text: m.text,
+        createdAt: m.createdAt,
+        offsetSeconds,
+      }
+    })
+
     return NextResponse.json({
       startedAt: startedAtMs ? new Date(startedAtMs).toISOString() : null,
       endedAt: endedAtMs ? new Date(endedAtMs).toISOString() : null,
       durationSeconds,
       fullText,
-      chunks: withOffsets,
+      chunks: chunkWithOffsets,
+      messages: messageWithOffsets,
     })
   } catch (e) {
     console.error("Transcript route: failed to load transcript", e)

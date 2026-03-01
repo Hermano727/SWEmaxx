@@ -1,32 +1,32 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import {
-  Play,
-  RotateCcw,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  ChevronRight,
-  Lightbulb,
-  CheckCircle2,
-  AlertCircle,
-  Mic,
-} from "lucide-react"
+import { Play, RotateCcw, ChevronLeft, ChevronRight, CheckCircle2, Mic, Lightbulb } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import InterviewNavbar from "./interview-navbar"
 import CodeEditor from "./code-editor"
 
 import { recordInterviewEnd } from "@/lib/firebase/firestore"
 import { getCurrentIdToken } from "@/lib/firebase/auth"
-import type { InterviewResult, InterviewEvent } from "@/lib/interview/types"
+import type {
+  InterviewEvent,
+  InterviewPhase,
+  InterviewResult,
+} from "@/lib/interview/types"
 import { getCodeTemplate, SUPPORTED_EDITOR_LANGUAGES, DEFAULT_EDITOR_LANGUAGE } from "@/lib/constants/questions"
 import type { QuestionBankItem, EditorLanguage } from "@/lib/constants/questions"
-import { companyAllowsExamples } from "@/lib/constants/companies"
 import { useContinuousTranscriptCapture } from "@/lib/interview/useContinuousTranscriptCapture"
+import {
+  type InterviewerUiMessage,
+  useInterviewerOutput,
+} from "@/lib/interview/useInterviewerOutput"
+
+import { ProblemPanel } from "./ProblemPanel"
+import { NotesPanel } from "./NotesPanel"
+import { HintToast } from "./HintToast"
+import { ExitConfirmDialog } from "./ExitConfirmDialog"
 
 interface InterviewScreenProps {
   config: any
@@ -40,6 +40,9 @@ const LEFT_PANEL_MIN_WIDTH = 56
 const LEFT_PANEL_MAX_WIDTH = 78
 const LEFT_PANEL_DEFAULT_WIDTH = 68
 const SCRATCHPAD_COLLAPSED_WIDTH_PX = 56
+
+const MAX_HINTS_PER_INTERVIEW = 3
+const MAX_ASK_QUESTIONS = 3
 
 const LANGUAGE_LABELS: Record<EditorLanguage, string> = {
   python: "Python",
@@ -81,12 +84,12 @@ const defaultQuestion: QuestionBankItem = {
 export default function InterviewScreen({ config, onFinish, onExit }: InterviewScreenProps) {
   const problem: QuestionBankItem = config?.problem ?? defaultQuestion
   const hints = problem.hints ?? []
-  const showExamples = companyAllowsExamples(config?.company)
   const initialCode = getCodeTemplate(problem.id, DEFAULT_EDITOR_LANGUAGE)
   const [timeRemaining, setTimeRemaining] = useState(45 * 60)
   const [code, setCode] = useState(initialCode)
   const [notes, setNotes] = useState("")
   const handleNotesTab = useTabInsert(notes, setNotes)
+  const [notesCollapsed, setNotesCollapsed] = useState(false)
   const [problemCollapsed, setProblemCollapsed] = useState(false)
   const [language, setLanguage] = useState<EditorLanguage>(DEFAULT_EDITOR_LANGUAGE)
   const [revealedHintsCount, setRevealedHintsCount] = useState(0)
@@ -99,8 +102,8 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [interviewDocId, setInterviewDocId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [isFinishingInterview, setIsFinishingInterview] = useState(false)
+  const [interviewErrorMessage, setInterviewErrorMessage] = useState<string | null>(null)
 
   type QuestionStatus = "pending" | "answered" | "error"
   type AskedQuestion = {
@@ -114,6 +117,15 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   const [questions, setQuestions] = useState<AskedQuestion[]>([])
   const [askInput, setAskInput] = useState("")
   const [askLoadingId, setAskLoadingId] = useState<string | null>(null)
+  const [interviewerLoading, setInterviewerLoading] = useState(false)
+  const [interviewerError, setInterviewerError] = useState<string | null>(null)
+  const lastInterviewerTickRef = useRef<number>(0)
+  const autoTickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const nonErrorQuestionsCount = questions.filter((q) => q.status !== "error").length
+  const remainingQuestionCount = Math.max(0, MAX_ASK_QUESTIONS - nonErrorQuestionsCount)
+
+  const [currentPhase, setCurrentPhase] = useState<InterviewPhase>("intro")
 
   useEffect(() => {
     // If the parent provided an interviewDocId (from setup), use it so this
@@ -128,7 +140,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
       setTimeRemaining((prev) => {
         if (prev <= 1) {
           clearInterval(interval)
-          handleFinish()
+          void finalizeInterview("timeout")
           return 0
         }
         return prev - 1
@@ -176,12 +188,24 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  const sessionId: string | undefined = config?.sessionId ?? interviewDocId ?? undefined
+  const sessionId: string | undefined =
+    config?.sessionId ?? config?.interviewDocId ?? interviewDocId ?? undefined
 
-  const interviewerMode: "silent" | "ask_box" | "active" =
-    config?.interviewerMode === "ask_box" || config?.interviewerMode === "active"
-      ? config.interviewerMode
-      : "silent"
+  const interviewerMode: "silent" | "ask_box" | "active" = (() => {
+    const raw =
+      config?.interviewerMode ??
+      config?.mode ??
+      "silent"
+    if (raw === "ask_box" || raw === "active") return raw
+    return "silent"
+  })()
+
+  const {
+    messages: interviewerMessages,
+    pushMessage: pushInterviewerMessage,
+  } = useInterviewerOutput({
+    enableVoice: Boolean(config?.interviewerVoiceEnabled),
+  })
 
   const { isSupported: micSupported, isRecording: micRecording, error: micError } =
     useContinuousTranscriptCapture({
@@ -194,9 +218,130 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
       company: config?.company,
       problemId: problem.id,
       problemTitle: problem.title,
+      phase: currentPhase,
     })
 
-  const sendEvent = async (event: Omit<InterviewEvent, "sessionId">) => {
+  const elapsedSeconds =
+    config?.timeLimit && typeof config.timeLimit === "number"
+      ? Math.max(0, config.timeLimit * 60 - timeRemaining)
+      : null
+  useEffect(() => {
+    if (elapsedSeconds == null) return
+
+    setCurrentPhase((prev) => {
+      if (prev === "wrapUp") return prev
+      if (elapsedSeconds < 60) {
+        return prev
+      }
+      if (elapsedSeconds < 5 * 60) {
+        return prev === "intro" ? "clarification" : prev
+      }
+      if (elapsedSeconds < 35 * 60) {
+        if (prev === "intro" || prev === "clarification") {
+          return "coding"
+        }
+        return prev
+      }
+      if (elapsedSeconds >= 35 * 60) {
+        return prev === "coding" || prev === "design" ? "testing" : prev
+      }
+      return prev
+    })
+  }, [elapsedSeconds])
+
+
+  const sendInterviewerTick = async (reason: "on_demand" | "auto") => {
+    if (!sessionId || interviewerMode !== "active") return
+    if (interviewerLoading) return
+
+    try {
+      setInterviewerLoading(true)
+      setInterviewerError(null)
+
+      const token = await getCurrentIdToken()
+      if (!token) {
+        setInterviewerError(
+          "You’re not signed in. Return to setup and sign in, then start the interview again."
+        )
+        return
+      }
+
+      const res = await fetch(`/api/interviews/${sessionId}/interviewer-tick`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          mode: interviewerMode,
+          reason,
+          codeSnapshot: code,
+          meta: {
+            company: config?.company,
+            problemId: problem.id,
+            problemTitle: problem.title,
+            elapsedSeconds,
+            phase: currentPhase,
+          },
+        }),
+      })
+
+      lastInterviewerTickRef.current = Date.now()
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        const message =
+          (data.error as string) ||
+          "Interviewer could not respond at this time."
+        setInterviewerError(message)
+        return
+      }
+
+      const data = (await res.json()) as {
+        message: InterviewerUiMessage | null
+      }
+
+      const message = data.message
+      if (message) {
+        pushInterviewerMessage(message)
+      }
+    } catch (e) {
+      console.error("Failed to get interviewer response", e)
+      setInterviewerError("Interviewer could not respond at this time.")
+    } finally {
+      setInterviewerLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!sessionId || interviewerMode !== "active") {
+      if (autoTickIntervalRef.current) {
+        clearInterval(autoTickIntervalRef.current)
+        autoTickIntervalRef.current = null
+      }
+      return
+    }
+
+    if (autoTickIntervalRef.current) return
+
+    autoTickIntervalRef.current = setInterval(() => {
+      const now = Date.now()
+      const last = lastInterviewerTickRef.current
+      // Only attempt an auto tick every ~90s and only if we have elapsed time
+      if (elapsedSeconds != null && elapsedSeconds > 0 && now - last > 90_000) {
+        void sendInterviewerTick("auto")
+      }
+    }, 30_000)
+
+    return () => {
+      if (autoTickIntervalRef.current) {
+        clearInterval(autoTickIntervalRef.current)
+        autoTickIntervalRef.current = null
+      }
+    }
+  }, [sessionId, interviewerMode, elapsedSeconds])
+
+  const logInterviewEvent = async (event: Omit<InterviewEvent, "sessionId">) => {
     if (!sessionId) return
     try {
       await fetch(`/api/interviews/${sessionId}/events`, {
@@ -220,12 +365,12 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
 
   const finalizeInterview = async (reason: "submit" | "timeout") => {
     if (!sessionId) {
-      setError("No interview session. Return to setup and start again.")
+      setInterviewErrorMessage("No interview session. Return to setup and start again.")
       return
     }
     let scorecard: InterviewResult | null = null
-    setLoading(true)
-    setError(null)
+    setIsFinishingInterview(true)
+    setInterviewErrorMessage(null)
     try {
       const eventPayload: InterviewEvent = {
         sessionId,
@@ -236,8 +381,10 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
       }
       const token = await getCurrentIdToken()
       if (!token) {
-        setError("You’re not signed in. Return to setup and sign in, then start the interview again.")
-        setLoading(false)
+        setInterviewErrorMessage(
+          "You’re not signed in. Return to setup and sign in, then start the interview again."
+        )
+        setIsFinishingInterview(false)
         return
       }
       const headers: Record<string, string> = {
@@ -260,11 +407,13 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
         scorecard = data.scorecard as InterviewResult
       } else if (res.status === 401 || res.status === 403) {
         const data = await res.json().catch(() => ({}))
-        setError((data.error as string) || "Unauthorized")
+        setInterviewErrorMessage((data.error as string) || "Unauthorized")
       }
     } catch (e: unknown) {
       console.error("Failed to generate interview scorecard", e)
-      setError(e instanceof Error ? e.message : "Failed to generate interview feedback")
+      setInterviewErrorMessage(
+        e instanceof Error ? e.message : "Failed to generate interview feedback"
+      )
     }
 
     if (!scorecard) {
@@ -296,22 +445,29 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
       }
     } catch (e: unknown) {
       console.error("Failed to record interview end:", e)
-      setError(e instanceof Error ? e.message : "Failed to save interview result")
+      setInterviewErrorMessage(
+        e instanceof Error ? e.message : "Failed to save interview result"
+      )
     } finally {
-      setLoading(false)
+      setIsFinishingInterview(false)
     }
 
-    onFinish(scorecard)
+    const resultWithId: InterviewResult = {
+      ...scorecard,
+      id: sessionId,
+    }
+    onFinish(resultWithId)
   }
 
-  const handleFinish = () => {
-    (async () => {
-      await finalizeInterview("timeout")
-    })()
-  }
+  async function handleSubmitInterview() {
+    if (!sessionId) {
+      setInterviewErrorMessage("No interview session. Return to setup and start again.")
+      return
+    }
 
-  async function handleEnd() {
-    await sendEvent({
+    setIsFinishingInterview(true)
+    setCurrentPhase("wrapUp")
+    await logInterviewEvent({
       type: "submit",
       phase: "wrapUp",
       timestamp: new Date().toISOString(),
@@ -324,7 +480,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   const handleUseHint = async () => {
     if (!config.hintsEnabled) return
 
-    const maxHints = Math.min(3, hints.length)
+    const maxHints = Math.min(MAX_HINTS_PER_INTERVIEW, hints.length)
     if (revealedHintsCount >= maxHints) return
 
     const nextIndex = revealedHintsCount
@@ -332,7 +488,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     setRevealedHintsCount(nextCount)
     setHintPanelOpen(true)
 
-    await sendEvent({
+    await logInterviewEvent({
       type: "hint",
       phase: "coding",
       timestamp: new Date().toISOString(),
@@ -343,13 +499,16 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     })
   }
 
-  const remainingHints = Math.max(0, Math.min(3, hints.length) - revealedHintsCount)
+  const remainingHintCount = Math.max(
+    0,
+    Math.min(MAX_HINTS_PER_INTERVIEW, hints.length) - revealedHintsCount
+  )
 
   const handleAskSubmit = async () => {
     const question = askInput.trim()
     if (!question || !sessionId) return
-    if (questions.filter((q) => q.status !== "error").length >= 3) {
-      setError("You’ve reached the question limit for this interview.")
+    if (remainingQuestionCount <= 0) {
+      setInterviewErrorMessage("You’ve reached the question limit for this interview.")
       return
     }
 
@@ -360,9 +519,9 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     setQuestions((prev) => [...prev, pendingQuestion])
     setAskInput("")
     setAskLoadingId(id)
-    setError(null)
+    setInterviewErrorMessage(null)
 
-    await sendEvent({
+    await logInterviewEvent({
       type: "question",
       phase: "clarification",
       timestamp: createdAt,
@@ -372,7 +531,9 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     try {
       const token = await getCurrentIdToken()
       if (!token) {
-        throw new Error("You’re not signed in. Return to setup and sign in, then start the interview again.")
+        throw new Error(
+          "You’re not signed in. Return to setup and sign in, then start the interview again."
+        )
       }
 
       const res = await fetch(`/api/interviews/${sessionId}/ask`, {
@@ -402,7 +563,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
       )
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to get interviewer answer."
-      setError(message)
+      setInterviewErrorMessage(message)
       setQuestions((prev) =>
         prev.map((q) => (q.id === id ? { ...q, status: "error" } : q))
       )
@@ -431,48 +592,12 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
           className="flex flex-col border-r border-[#30363d] transition-[width] duration-200"
           style={{ width: rightPanelCollapsed ? "100%" : `${leftPanelWidth}%` }}
         >
-          <div className={`${problemCollapsed ? "h-12" : "min-h-[36%] max-h-[40%]"} border-b border-[#30363d] transition-all duration-200 flex flex-col`}>
-            <button
-              onClick={() => setProblemCollapsed(!problemCollapsed)}
-              className="flex items-center justify-between px-4 py-3 bg-[#1a1d23] border-b border-[#30363d] text-left text-white hover:bg-[#22262e] active:bg-[#242830] transition-colors rounded-none"
-              aria-expanded={!problemCollapsed}
-            >
-              <span className="text-sm font-semibold tracking-tight">Problem: {problem.title}</span>
-              {problemCollapsed ? <ChevronDown className="h-4 w-4 shrink-0 text-[#8b949e]" /> : <ChevronUp className="h-4 w-4 shrink-0 text-[#8b949e]" />}
-            </button>
-
-            {!problemCollapsed && (
-              <div className="flex-1 overflow-y-auto p-4 bg-[#0d1117] min-h-0 problem-scroll">
-                <div className="text-[#e6edf3] space-y-4 text-sm leading-relaxed">
-                  <p>{problem.description}</p>
-
-                  {showExamples && problem.examples.length > 0 && (
-                    <div>
-                      <p className="font-medium text-white text-[13px] mb-2">Example{problem.examples.length > 1 ? "s" : ""}</p>
-                      <div className="space-y-3">
-                        {problem.examples.map((ex, i) => (
-                          <div key={i} className="bg-[#1a1d23] p-4 rounded-md border border-[#30363d] font-mono text-[13px] text-[#e6edf3]">
-                            <div>Input: {ex.input}</div>
-                            <div>Output: {ex.output}</div>
-                            {ex.explanation && <div className="text-[#8b949e] mt-2">Explanation: {ex.explanation}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="font-medium text-white text-[13px] mb-2">Constraints</p>
-                    <ul className="list-disc list-inside space-y-1 text-[#8b949e] text-[13px]">
-                      {problem.constraints.map((c, i) => (
-                        <li key={i}>{c}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <ProblemPanel
+            problem={problem}
+            company={config?.company}
+            collapsed={problemCollapsed}
+            onToggleCollapsed={() => setProblemCollapsed((prev) => !prev)}
+          />
 
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between px-4 py-3 bg-[#1a1d23] border-b border-[#30363d]">
@@ -519,22 +644,24 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                     variant="outline"
                     size="sm"
                     onClick={handleUseHint}
-                    disabled={remainingHints <= 0}
+                    disabled={remainingHintCount <= 0}
                     className="h-8 border-[#30363d] text-[#c9d1d9] hover:bg-[#22262e] hover:text-white hover:border-[#3b3f4d] disabled:opacity-50"
                   >
                     <Lightbulb className="mr-2 h-3.5 w-3.5 text-[#46a758]" />
-                    {remainingHints > 0 ? `Hint (${remainingHints} left)` : "No hints left"}
+                    {remainingHintCount > 0
+                      ? `Hint (${remainingHintCount} left)`
+                      : "No hints left"}
                   </Button>
                   )}
                 </div>
 
                 <Button
-                  onClick={handleEnd}
-                  disabled={loading}
+                  onClick={handleSubmitInterview}
+                  disabled={isFinishingInterview}
                   className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white font-medium text-sm disabled:opacity-70"
                 >
                   <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
-                  {loading ? "Generating feedback…" : "Submit Solution"}
+                  {isFinishingInterview ? "Generating feedback…" : "Submit Solution"}
                 </Button>
               </div>
             </div>
@@ -550,8 +677,12 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
         )}
 
         <div
-          className={`flex flex-col bg-[#0d1117] ${rightPanelCollapsed ? "w-12" : ""}`}
-          style={{ width: rightPanelCollapsed ? `${SCRATCHPAD_COLLAPSED_WIDTH_PX}px` : `${100 - leftPanelWidth}%` }}
+          className="flex flex-col bg-[#0d1117] min-h-0 h-full"
+          style={{
+            width: rightPanelCollapsed
+              ? `${SCRATCHPAD_COLLAPSED_WIDTH_PX}px`
+              : `${100 - leftPanelWidth}%`,
+          }}
         >
           {rightPanelCollapsed ? (
             <button
@@ -561,8 +692,9 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
               <ChevronLeft className="h-5 w-5" />
             </button>
           ) : (
-            <>
-              <div className="flex flex-col bg-[#0d1117] min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 p-4">
+              <div className="flex-1 flex flex-col min-h-0 border border-[#30363d] rounded-md overflow-hidden bg-[#1a1d23]">
+                {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 bg-[#1a1d23] border-b border-[#30363d]">
                   <h2 className="text-sm font-semibold text-white tracking-tight">Interview brain</h2>
                   <button
@@ -575,45 +707,66 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                   </button>
                 </div>
 
+                {/* Content */}
                 <div className="flex-1 flex flex-col min-h-0 bg-[#0d1117]">
                   {/* Top: Ask interviewer */}
-                  <div className="flex-[3] min-h-0 p-4 pb-2 flex flex-col gap-3">
-                    <div className="rounded-md border border-[#30363d] bg-[#1a1d23] p-3">
+                  <div className="flex-1 min-h-0 p-4 pb-3 flex flex-col gap-3 overflow-y-auto">
+                    <div className="rounded-md border border-[#30363d] bg-[#1a1d23] p-3 space-y-2">
                       <p className="text-xs text-[#8b949e] mb-2">
                         Ask short clarifying questions like you would with a real interviewer.{" "}
                         <span className="text-[#c9d1d9] font-medium">Up to 3 questions</span> per interview.
                       </p>
                       <Textarea
                         value={askInput}
-                        onChange={(e) => setAskInput(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                          setAskInput(e.target.value)
+                        }
                         rows={3}
                         className="w-full bg-[#0d1117] border border-[#30363d] text-sm text-white resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#1a1d23] placeholder:text-[#6e7681]"
                         placeholder="Example: “Can I assume the array is sorted?”"
                       />
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <span className="text-[11px] text-[#6e7681]">
-                          {Math.max(0, 3 - questions.filter((q) => q.status !== "error").length)} questions remaining
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            disabled
-                            className="h-8 w-8 border-[#30363d] text-[#6e7681] hover:text-[#c9d1d9] hover:bg-[#22262e]"
-                            title="Use your mic to fill this box (coming soon)"
-                          >
-                            <Mic className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={handleAskSubmit}
-                            disabled={!askInput.trim() || !!askLoadingId || !sessionId}
-                            className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white text-xs px-3"
-                          >
-                            {askLoadingId ? "Asking…" : "Ask interviewer"}
-                          </Button>
+                      <div className="mt-2 flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[11px] text-[#6e7681]">
+                            {remainingQuestionCount} questions remaining
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled
+                              className="h-8 w-8 border-[#30363d] text-[#6e7681] hover:text-[#c9d1d9] hover:bg-[#22262e]"
+                              title="Use your mic to fill this box (coming soon)"
+                            >
+                              <Mic className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={handleAskSubmit}
+                              disabled={!askInput.trim() || !!askLoadingId || !sessionId}
+                              className="h-8 bg-[#46a758] hover:bg-[#3d9350] active:bg-[#36834a] text-white text-xs px-3"
+                            >
+                              {askLoadingId ? "Asking…" : "Ask interviewer"}
+                            </Button>
+                          </div>
                         </div>
+                        {interviewerMode === "active" && (
+                          <div className="flex items-center justify-between gap-3 border-t border-[#30363d] pt-2 mt-1">
+                            <span className="text-[11px] text-[#6e7681]">
+                              Want a nudge? Let the AI interviewer briefly check in on your progress.
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={!sessionId || interviewerLoading}
+                              onClick={() => void sendInterviewerTick("on_demand")}
+                              className="h-8 border-[#46a758] text-[#c9d1d9] hover:bg-[#22262e] hover:text-white"
+                            >
+                              {interviewerLoading ? "Checking in…" : "Check in with interviewer"}
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -627,126 +780,126 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                           <div key={q.id} className="space-y-1">
                             <p className="text-xs font-medium text-[#e6edf3]">You</p>
                             <p className="text-xs text-[#c9d1d9]">{q.text}</p>
-                            <p className="mt-1 text-[11px] font-medium text-[#8b949e]">Interviewer</p>
+                            <p className="mt-1 text-[11px] font-medium text-[#8b949e]">
+                              Interviewer
+                            </p>
                             {q.status === "pending" && (
                               <p className="text-xs text-[#6e7681]">Thinking…</p>
                             )}
                             {q.status === "answered" && (
-                              <p className="text-xs text-[#e6edf3] leading-relaxed">{q.answer}</p>
+                              <p className="text-xs text-[#e6edf3] leading-relaxed">
+                                {q.answer}
+                              </p>
                             )}
                             {q.status === "error" && (
-                              <p className="text-xs text-red-400">Could not fetch an answer. Try again.</p>
+                              <p className="text-xs text-red-400">
+                                Could not fetch an answer. Try again.
+                              </p>
                             )}
                             <div className="h-px bg-[#30363d] mt-2" />
                           </div>
                         ))
                       )}
                     </div>
+
+                    {interviewerMode === "active" && (
+                      <div className="mt-3 rounded-md border border-[#30363d] bg-[#0d1117] p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-[#c9d1d9]">
+                            Interviewer responses
+                          </p>
+                          {interviewerError && (
+                            <span className="text-[11px] text-red-400 truncate max-w-[60%]">
+                              {interviewerError}
+                            </span>
+                          )}
+                        </div>
+                        {interviewerMessages.length === 0 ? (
+                          <p className="text-xs text-[#6e7681]">
+                            No interviewer messages yet. Click{" "}
+                            <span className="text-[#c9d1d9] font-medium">
+                              Check in with interviewer
+                            </span>{" "}
+                            above to get a short prompt.
+                          </p>
+                        ) : (
+                          <div className="space-y-2 max-h-40 overflow-y-auto">
+                            {interviewerMessages.map((m) => (
+                              <div key={m.id} className="text-xs text-[#e6edf3] leading-relaxed space-y-0.5">
+                                <span className="mr-1 text-[11px] uppercase tracking-wide text-[#8b949e]">
+                                  {m.kind === "question"
+                                    ? "Question"
+                                    : m.kind === "hint"
+                                      ? "Hint"
+                                      : "Feedback"}
+                                  :
+                                </span>
+                                {m.replyToText && (
+                                  <div className="text-[11px] text-[#8b949e]">
+                                    Replying to:{" "}
+                                    <span className="italic text-[#c9d1d9]">
+                                      “{m.replyToText}”
+                                    </span>
+                                  </div>
+                                )}
+                                <div>{m.text}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Bottom: Notes */}
-                  <div className="flex-[2] min-h-0 border-t border-[#30363d] bg-[#0d1117] flex flex-col">
-                    <div className="px-4 pt-3 pb-2">
-                      <p className="text-xs font-medium text-[#c9d1d9] mb-2">Notes</p>
-                      <Textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        onKeyDown={handleNotesTab}
-                        className="w-full h-28 bg-[#1a1d23] border border-[#30363d] text-white resize-none rounded-md focus-visible:ring-2 focus-visible:ring-[#46a758] focus-visible:ring-offset-0 focus-visible:ring-offset-[#0d1117] placeholder:text-[#6e7681]"
-                        placeholder="Write your thoughts, draw diagrams, plan your approach..."
-                      />
-                    </div>
-                    <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] flex items-center justify-between gap-2">
-                      <span className="text-xs text-[#6e7681]">
-                        Auto-saved ·{" "}
-                        {micSupported
-                          ? micRecording
-                            ? "Listening for voice notes"
-                            : "Mic ready"
-                          : "Voice capture unavailable"}
-                      </span>
-                      {(error || micError) && (
-                        <span
-                          className="text-xs text-red-400 truncate max-w-[60%]"
-                          title={error ?? micError ?? undefined}
-                        >
-                          {error ?? micError}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  <NotesPanel
+                    notes={notes}
+                    notesCollapsed={notesCollapsed}
+                    onToggleCollapsed={() => setNotesCollapsed((v) => !v)}
+                    onChangeNotes={setNotes}
+                    onNotesKeyDown={handleNotesTab}
+                  />
+                </div>
+
+                {/* Footer aligned with left panel buttons */}
+                <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] flex items-center justify-between h-[56px]">
+                  <span className="text-xs text-[#6e7681]">
+                    Auto-saved ·{" "}
+                    {micSupported
+                      ? micRecording
+                        ? "Listening for voice notes"
+                        : "Mic ready"
+                      : "Voice capture unavailable"}
+                  </span>
+                  {(interviewErrorMessage || micError || interviewerError) && (
+                    <span
+                      className="text-xs text-red-400 truncate max-w-[60%]"
+                      title={
+                        interviewErrorMessage ?? micError ?? interviewerError ?? undefined
+                      }
+                    >
+                      {interviewErrorMessage ?? micError ?? interviewerError}
+                    </span>
+                  )}
                 </div>
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>
 
-      {config.hintsEnabled && hintPanelOpen && revealedHintsCount > 0 && hints.length > 0 && (
-        <div className="fixed bottom-4 left-4 max-w-md z-40">
-          <Card className="bg-[#1a1d23] border border-[#30363d] shadow-xl rounded-lg overflow-hidden">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Lightbulb className="h-4 w-4 text-[#46a758]" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-[#8b949e]">
-                    Interview hint{revealedHintsCount > 1 ? "s" : ""}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setHintPanelOpen(false)}
-                  className="text-xs text-[#8b949e] hover:text-white hover:bg-[#22262e] rounded-md px-2 py-1 transition-colors"
-                >
-                  Hide
-                </button>
-              </div>
+      <HintToast
+        hintsEnabled={config.hintsEnabled}
+        isOpen={hintPanelOpen}
+        revealedHintsCount={revealedHintsCount}
+        hints={hints}
+        onClose={() => setHintPanelOpen(false)}
+      />
 
-              <div className="space-y-2">
-                {hints.slice(0, revealedHintsCount).map((hint, index) => (
-                  <div
-                    key={index}
-                    className="rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-2"
-                  >
-                    <p className="text-[11px] font-medium text-[#8b949e] mb-1">
-                      Hint {index + 1}
-                    </p>
-                    <p className="text-sm text-[#e6edf3] leading-relaxed">{hint}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {showExitConfirm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="bg-[#1a1d23] border border-[#30363d] max-w-md rounded-lg shadow-xl">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-4 mb-6">
-                <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="text-base font-semibold text-white mb-1">Exit interview?</h3>
-                  <p className="text-sm text-[#8b949e]">Your progress will not be saved.</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 justify-end">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowExitConfirm(false)}
-                  className="border-[#30363d] text-[#c9d1d9] hover:bg-[#22262e] hover:text-white"
-                >
-                  Continue
-                </Button>
-                <Button onClick={onExit} variant="destructive" className="text-sm">
-                  Exit
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <ExitConfirmDialog
+        open={showExitConfirm}
+        onCancel={() => setShowExitConfirm(false)}
+        onExit={onExit}
+      />
     </div>
   )
 }

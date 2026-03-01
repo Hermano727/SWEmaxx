@@ -103,22 +103,41 @@ export async function insertTranscriptChunk(params: {
   const { interviewId, userId, mode, source, text } = params
   const id = randomUUID()
 
-  const sequence = await getNextSequenceForInterview(
-    interviewId,
-    "interview_transcripts"
-  )
+  let lastError: unknown
 
-  await withClient(async (client) => {
-    await client.query(
-      `
-      INSERT INTO interview_transcripts (id, interview_id, user_id, mode, source, sequence, text)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `,
-      [id, interviewId, userId, mode, source, sequence, text]
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const sequence = await getNextSequenceForInterview(
+      interviewId,
+      "interview_transcripts"
     )
-  })
 
-  return { id, sequence }
+    try {
+      await withClient(async (client) => {
+        await client.query(
+          `
+          INSERT INTO interview_transcripts (id, interview_id, user_id, mode, source, sequence, text)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `,
+          [id, interviewId, userId, mode, source, sequence, text]
+        )
+      })
+
+      return { id, sequence }
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : typeof e === "string" ? e : ""
+      lastError = e
+      if (
+        !message.includes("idx_interview_transcripts_interview_sequence") &&
+        !message.includes("interview_transcripts_interview_sequence")
+      ) {
+        throw e
+      }
+      // Otherwise, sequence collided; retry with a fresh value.
+    }
+  }
+
+  throw lastError ?? new Error("Failed to insert transcript chunk after retries")
 }
 
 export async function getTranscriptTextForInterview(
@@ -197,5 +216,46 @@ export async function insertInterviewMessage(params: {
   })
 
   return { id, sequence }
+}
+
+export type InterviewMessageRecord = {
+  id: string
+  role: MessageRole
+  messageType: MessageType
+  text: string
+  sequence: number
+  createdAt: string
+}
+
+export async function getInterviewMessagesForInterview(
+  interviewId: string
+): Promise<InterviewMessageRecord[]> {
+  return withClient(async (client) => {
+    const result = await client.query<{
+      id: string
+      role: MessageRole
+      message_type: MessageType
+      text: string
+      sequence: number
+      created_at: string
+    }>(
+      `
+      SELECT id, role, message_type, text, sequence, created_at
+      FROM interview_messages
+      WHERE interview_id = $1
+      ORDER BY sequence ASC
+      `,
+      [interviewId]
+    )
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      role: row.role,
+      messageType: row.message_type,
+      text: row.text,
+      sequence: row.sequence,
+      createdAt: row.created_at,
+    }))
+  })
 }
 

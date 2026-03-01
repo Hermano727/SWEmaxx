@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react"
 import { getCurrentIdToken } from "@/lib/firebase/auth"
+import {
+  TRANSCRIPT_MAX_BUFFER_CHARS,
+  TRANSCRIPT_SILENCE_FLUSH_MS,
+} from "@/lib/constants/app"
 import type { TranscriptMode } from "@/lib/db/postgres"
+import type { InterviewPhase } from "@/lib/interview/types"
 
 type UseContinuousTranscriptCaptureOptions = {
   sessionId?: string
@@ -11,6 +16,7 @@ type UseContinuousTranscriptCaptureOptions = {
   company?: string
   problemId?: string
   problemTitle?: string
+  phase?: InterviewPhase
 }
 
 type UseContinuousTranscriptCaptureState = {
@@ -20,13 +26,22 @@ type UseContinuousTranscriptCaptureState = {
   transcriptPreview: string
 }
 
-// Lightweight wrapper over the Web Speech API (where available).
-// This hook continuously listens while `enabled` is true and sends
-// finalized transcript chunks to the transcript-chunk API.
+type SendParams = {
+  sessionId: string
+  mode: TranscriptMode
+  company?: string
+  problemId?: string
+  problemTitle?: string
+  phase?: InterviewPhase
+  onError: (message: string) => void
+}
+
+// Uses the Web Speech API (browser-dependent quality). For best accuracy, a future
+// option is cloud STT (e.g. OpenAI Whisper) via a backend that receives audio chunks.
 export function useContinuousTranscriptCapture(
   options: UseContinuousTranscriptCaptureOptions
 ): UseContinuousTranscriptCaptureState {
-  const { sessionId, enabled, mode, company, problemId, problemTitle } = options
+  const { sessionId, enabled, mode, company, problemId, problemTitle, phase } = options
 
   const [isSupported, setIsSupported] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
@@ -35,6 +50,32 @@ export function useContinuousTranscriptCapture(
 
   const recognitionRef = useRef<any>(null)
   const shouldRestartRef = useRef(false)
+  const bufferRef = useRef("")
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sendParamsRef = useRef<SendParams | null>(null)
+
+  const flushBuffer = () => {
+    if (silenceTimerRef.current != null) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+    const text = bufferRef.current.trim()
+    if (!text) return
+    bufferRef.current = ""
+    const params = sendParamsRef.current
+    if (params) {
+      void sendTranscriptChunk({
+        sessionId: params.sessionId,
+        text,
+        mode: params.mode,
+        company: params.company,
+        problemId: params.problemId,
+        problemTitle: params.problemTitle,
+        phase: params.phase,
+        onError: params.onError,
+      })
+    }
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -51,10 +92,25 @@ export function useContinuousTranscriptCapture(
 
     setIsSupported(true)
 
+    if (sessionId) {
+      sendParamsRef.current = {
+        sessionId,
+        mode,
+        company,
+        problemId,
+        problemTitle,
+        phase,
+        onError: (message) => setError(message),
+      }
+    } else {
+      sendParamsRef.current = null
+    }
+
     const recognition = new SpeechRecognitionCtor() as any
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = "en-US"
+    recognition.maxAlternatives = 2
 
     recognition.onresult = (event: any) => {
       let finalText = ""
@@ -63,7 +119,15 @@ export function useContinuousTranscriptCapture(
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i]
         if (result.isFinal) {
-          finalText += result[0].transcript
+          const alt =
+            result.length > 1
+              ? Array.from({ length: result.length }, (_, j) => result[j]).reduce(
+                  (best, a) =>
+                    (a.confidence ?? 0) > (best.confidence ?? 0) ? a : best,
+                  result[0]
+                )
+              : result[0]
+          finalText += alt.transcript ?? ""
         } else {
           interimText += result[0].transcript
         }
@@ -83,23 +147,24 @@ export function useContinuousTranscriptCapture(
           return next
         })
 
-        if (sessionId) {
-          void sendTranscriptChunk({
-            sessionId,
-            text: chunk,
-            mode,
-            company,
-            problemId,
-            problemTitle,
-            onError: (message) => setError(message),
-          })
+        bufferRef.current = (bufferRef.current + " " + chunk).trim()
+
+        if (silenceTimerRef.current != null) {
+          clearTimeout(silenceTimerRef.current)
+        }
+        silenceTimerRef.current = setTimeout(() => {
+          silenceTimerRef.current = null
+          flushBuffer()
+        }, TRANSCRIPT_SILENCE_FLUSH_MS)
+
+        if (bufferRef.current.length >= TRANSCRIPT_MAX_BUFFER_CHARS) {
+          flushBuffer()
         }
       }
     }
 
     recognition.onerror = (event: any) => {
       const message = (event && event.error) || "Speech recognition error"
-      console.error("Speech recognition error", message)
       setError(message)
     }
 
@@ -109,8 +174,8 @@ export function useContinuousTranscriptCapture(
         try {
           recognition.start()
           setIsRecording(true)
-        } catch (e) {
-          console.error("Failed to restart speech recognition", e)
+        } catch {
+          // ignore restart failures; hook will surface errors on next start
         }
       }
     }
@@ -119,6 +184,25 @@ export function useContinuousTranscriptCapture(
 
     return () => {
       shouldRestartRef.current = false
+      if (silenceTimerRef.current != null) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
+      }
+      if (bufferRef.current.trim() && sendParamsRef.current) {
+        const text = bufferRef.current.trim()
+        bufferRef.current = ""
+        const params = sendParamsRef.current
+        void sendTranscriptChunk({
+          sessionId: params.sessionId,
+          text,
+          mode: params.mode,
+          company: params.company,
+          problemId: params.problemId,
+          problemTitle: params.problemTitle,
+          phase: params.phase,
+          onError: params.onError,
+        })
+      }
       try {
         recognition.stop()
       } catch {
@@ -126,7 +210,7 @@ export function useContinuousTranscriptCapture(
       }
       recognitionRef.current = null
     }
-  }, [sessionId, enabled, mode, company, problemId, problemTitle])
+  }, [sessionId, enabled, mode, company, problemId, problemTitle, phase])
 
   useEffect(() => {
     if (!isSupported || !recognitionRef.current) return
@@ -137,12 +221,12 @@ export function useContinuousTranscriptCapture(
         recognitionRef.current.start()
         setIsRecording(true)
         setError(null)
-      } catch (e) {
-        console.error("Failed to start speech recognition", e)
+      } catch {
         setError("Failed to start microphone. Check browser permissions.")
       }
     } else if ((!enabled || !sessionId) && isRecording) {
       shouldRestartRef.current = false
+      flushBuffer()
       try {
         recognitionRef.current.stop()
       } catch {
@@ -167,9 +251,10 @@ async function sendTranscriptChunk(params: {
   company?: string
   problemId?: string
   problemTitle?: string
+  phase?: InterviewPhase
   onError: (message: string) => void
 }) {
-  const { sessionId, text, mode, company, problemId, problemTitle, onError } =
+  const { sessionId, text, mode, company, problemId, problemTitle, phase, onError } =
     params
 
   try {
@@ -193,6 +278,7 @@ async function sendTranscriptChunk(params: {
         company,
         problemId,
         problemTitle,
+        phase,
       }),
     })
 
@@ -202,8 +288,7 @@ async function sendTranscriptChunk(params: {
         (data.error as string) || "Failed to save transcript chunk."
       onError(message)
     }
-  } catch (e) {
-    console.error("Failed to send transcript chunk", e)
+  } catch {
     onError("Failed to save transcript chunk.")
   }
 }

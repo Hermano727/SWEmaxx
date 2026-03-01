@@ -30,11 +30,12 @@ const companies = [
 
 export default function InterviewSetup({ onStart }: InterviewSetupProps) {
   const [selectedCompany, setSelectedCompany] = useState("google")
-  const [interviewMode, setInterviewMode] = useState("silent")
+  const [interviewMode, setInterviewMode] = useState<"silent" | "active">("silent")
   const [liveFeedback, setLiveFeedback] = useState(false)
   const [difficulty, setDifficulty] = useState("random")
   const [timeLimit, setTimeLimit] = useState(true)
   const [hintsEnabled, setHintsEnabled] = useState(true)
+  const [interviewerVoiceEnabled, setInterviewerVoiceEnabled] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [interviewDocId, setInterviewDocId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -61,8 +62,10 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
       const question = pickRandomQuestion(difficulty as "random" | Difficulty)
       const meta = {
         company: selectedCompany,
-        mode: interviewMode,
+        mode: interviewMode, // legacy field
+        interviewerMode: interviewMode, // new canonical field
         liveFeedback,
+        interviewerVoiceEnabled,
         difficulty,
         ...(difficulty === "random" && { drawnDifficulty: question.difficulty }),
         timeLimit,
@@ -75,8 +78,10 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
       setLoading(false)
       onStart({
         company: selectedCompany,
-        mode: interviewMode,
+        mode: interviewMode, // legacy field
+        interviewerMode: interviewMode,
         liveFeedback,
+        interviewerVoiceEnabled,
         difficulty,
         timeLimit,
         hintsEnabled,
@@ -167,14 +172,15 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
 
                 <button
                   type="button"
-                  disabled
-                  className="cursor-not-allowed rounded-lg border-2 border-border bg-muted/30 p-6 text-left opacity-60"
+                  onClick={() => setInterviewMode("active")}
+                  className={`rounded-lg border-2 p-6 text-left transition-colors ${
+                    interviewMode === "active"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:border-primary/50"
+                  }`}
                 >
                   <h3 className="font-semibold text-foreground">
                     Active interviewer
-                    <span className="ml-2 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                      Coming soon
-                    </span>
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
                     AI actively engages and provides hints during the interview.
@@ -190,12 +196,35 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     Get stopped and guided at crucial moments
                   </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Coming soon — active interviewer check-ins are controlled by the Interview mode above.
+                  </p>
                 </div>
                 <Switch
                   id="live-feedback"
                   checked={liveFeedback}
                   onCheckedChange={setLiveFeedback}
-                  disabled={interviewMode === "active"}
+                  disabled
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
+                <div>
+                  <Label htmlFor="interviewer-voice" className="font-medium text-foreground">
+                    Interviewer voice
+                  </Label>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Hear the AI interviewer speak responses out loud.
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Coming soon — voice will always mirror the on-screen text and can be muted mid-interview.
+                  </p>
+                </div>
+                <Switch
+                  id="interviewer-voice"
+                  checked={interviewerVoiceEnabled}
+                  onCheckedChange={setInterviewerVoiceEnabled}
+                  disabled
                 />
               </div>
             </CardContent>
