@@ -126,6 +126,9 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
   const remainingQuestionCount = Math.max(0, MAX_ASK_QUESTIONS - nonErrorQuestionsCount)
 
   const [currentPhase, setCurrentPhase] = useState<InterviewPhase>("intro")
+  const [isMicUserEnabled, setIsMicUserEnabled] = useState(true)
+  const [isTyping, setIsTyping] = useState(false)
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     // If the parent provided an interviewDocId (from setup), use it so this
@@ -207,19 +210,59 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     enableVoice: Boolean(config?.interviewerVoiceEnabled),
   })
 
-  const { isSupported: micSupported, isRecording: micRecording, error: micError } =
-    useContinuousTranscriptCapture({
-      sessionId,
-      enabled: Boolean(sessionId),
-      mode:
-        interviewerMode === "active"
-          ? "active_interviewer_context"
-          : "silent",
-      company: config?.company,
-      problemId: problem.id,
-      problemTitle: problem.title,
-      phase: currentPhase,
-    })
+  const micBaseEnabled =
+    Boolean(sessionId) && currentPhase !== "wrapUp" && !isFinishingInterview
+
+  const micEnabled = micBaseEnabled && isMicUserEnabled
+
+  const {
+    isSupported: micSupported,
+    isRecording: micRecording,
+    error: micError,
+    voiceGateway,
+  } = useContinuousTranscriptCapture({
+    sessionId,
+    enabled: micEnabled,
+    mode: interviewerMode === "active" ? "active_interviewer_context" : "silent",
+    company: config?.company,
+    problemId: problem.id,
+    problemTitle: problem.title,
+    phase: currentPhase,
+    isTyping,
+  })
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      const tag = target.tagName.toLowerCase()
+      const isTypingField =
+        tag === "input" || tag === "textarea" || target.isContentEditable
+
+      // Monaco renders a textarea; treat that as typing too.
+      const inMonaco =
+        typeof (target as any).closest === "function" &&
+        !!(target as any).closest(".monaco-editor")
+
+      if (!isTypingField && !inMonaco) return
+
+      setIsTyping(true)
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+      typingTimerRef.current = setTimeout(() => {
+        typingTimerRef.current = null
+        setIsTyping(false)
+      }, 1200)
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current)
+        typingTimerRef.current = null
+      }
+    }
+  }, [])
+
 
   const elapsedSeconds =
     config?.timeLimit && typeof config.timeLimit === "number"
@@ -249,6 +292,26 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     })
   }, [elapsedSeconds])
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return
+      if (e.key !== "f" && e.key !== "F") return
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      const tag = target.tagName.toLowerCase()
+      const isTypingField =
+        tag === "input" || tag === "textarea" || target.isContentEditable
+      if (isTypingField) return
+      setIsMicUserEnabled((prev) => !prev)
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [])
+
 
   const sendInterviewerTick = async (reason: "on_demand" | "auto") => {
     if (!sessionId || interviewerMode !== "active") return
@@ -257,6 +320,31 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
     try {
       setInterviewerLoading(true)
       setInterviewerError(null)
+
+      // Prefer low-latency voice gateway if configured (WS transport).
+      if (reason === "on_demand" && voiceGateway?.isConnected) {
+        const msg = await voiceGateway.requestInterviewerFeedback({
+          codeSnapshot: code,
+          meta: {
+            phase: currentPhase,
+            elapsedSeconds,
+            company: config?.company,
+            problemTitle: problem.title,
+          },
+        })
+
+        lastInterviewerTickRef.current = Date.now()
+
+        if (msg) {
+          pushInterviewerMessage({
+            id: msg.id,
+            kind: msg.kind,
+            text: msg.text,
+            replyToText: null,
+          })
+        }
+        return
+      }
 
       const token = await getCurrentIdToken()
       if (!token) {
@@ -368,6 +456,7 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
       setInterviewErrorMessage("No interview session. Return to setup and start again.")
       return
     }
+    setCurrentPhase("wrapUp")
     let scorecard: InterviewResult | null = null
     setIsFinishingInterview(true)
     setInterviewErrorMessage(null)
@@ -864,11 +953,15 @@ export default function InterviewScreen({ config, onFinish, onExit }: InterviewS
                 <div className="px-4 py-2 bg-[#1a1d23] border-t border-[#30363d] flex items-center justify-between h-[56px]">
                   <span className="text-xs text-[#6e7681]">
                     Auto-saved ·{" "}
-                    {micSupported
-                      ? micRecording
-                        ? "Listening for voice notes"
-                        : "Mic ready"
-                      : "Voice capture unavailable"}
+                    {micSupported ? (
+                      isMicUserEnabled
+                        ? micRecording
+                          ? "Listening for voice notes (press F to mute mic)"
+                          : "Mic ready (press F to mute mic)"
+                        : "Mic off (press F to turn mic on)"
+                    ) : (
+                      "Voice capture unavailable"
+                    )}
                   </span>
                   {(interviewErrorMessage || micError || interviewerError) && (
                     <span

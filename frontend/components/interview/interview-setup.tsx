@@ -188,6 +188,15 @@ export default function InterviewSetup({ onStart }: InterviewSetupProps) {
                 </button>
               </div>
 
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <h3 className="font-semibold text-foreground">Voice capture</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  We’ll start in continuous listening mode and capture your speech as notes during the
+                  interview. You can quickly mute or unmute the mic mid-interview with the{" "}
+                  <span className="font-mono text-xs">F</span> key.
+                </p>
+              </div>
+
               <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
                 <div>
                   <Label htmlFor="live-feedback" className="font-medium text-foreground">

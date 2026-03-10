@@ -16,15 +16,31 @@ const pool = new Pool({
       : undefined,
 })
 
+/**
+ * How a given transcript chunk is meant to be interpreted by downstream
+ * consumers (scorecards, live interviewer, history views).
+ *
+ * - "silent" – passive capture of what the candidate says during the problem.
+ * - "ask_interviewer_question" – short utterances that correspond to explicit
+ *   Q&A with the interviewer (typed or spoken).
+ * - "active_interviewer_context" – background context used by the active
+ *   interviewer loop to decide when/how to nudge.
+ */
 export type TranscriptMode =
   | "silent"
   | "ask_interviewer_question"
   | "active_interviewer_context"
 
+/** Who produced a given transcript chunk. */
 export type TranscriptSource = "user" | "interviewer_ai"
 
+/** Role for live interviewer messages rendered in the UI. */
 export type MessageRole = "user" | "assistant"
 
+/**
+ * Message classification for interviewer messages so we can style and filter
+ * them consistently across history and live views.
+ */
 export type MessageType = "question" | "hint" | "nudged_feedback"
 
 export type TranscriptChunk = {
@@ -103,41 +119,23 @@ export async function insertTranscriptChunk(params: {
   const { interviewId, userId, mode, source, text } = params
   const id = randomUUID()
 
-  let lastError: unknown
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const sequence = await getNextSequenceForInterview(
-      interviewId,
-      "interview_transcripts"
+  return withClient(async (client) => {
+    const result = await client.query<{ sequence: number }>(
+      `
+      INSERT INTO interview_transcripts (id, interview_id, user_id, mode, source, sequence, text)
+      VALUES (
+        $1, $2, $3, $4, $5,
+        (SELECT COALESCE(MAX(sequence), 0) + 1 FROM interview_transcripts WHERE interview_id = $2),
+        $6
+      )
+      RETURNING sequence
+      `,
+      [id, interviewId, userId, mode, source, text]
     )
 
-    try {
-      await withClient(async (client) => {
-        await client.query(
-          `
-          INSERT INTO interview_transcripts (id, interview_id, user_id, mode, source, sequence, text)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-          `,
-          [id, interviewId, userId, mode, source, sequence, text]
-        )
-      })
-
-      return { id, sequence }
-    } catch (e) {
-      const message =
-        e instanceof Error ? e.message : typeof e === "string" ? e : ""
-      lastError = e
-      if (
-        !message.includes("idx_interview_transcripts_interview_sequence") &&
-        !message.includes("interview_transcripts_interview_sequence")
-      ) {
-        throw e
-      }
-      // Otherwise, sequence collided; retry with a fresh value.
-    }
-  }
-
-  throw lastError ?? new Error("Failed to insert transcript chunk after retries")
+    const sequence = result.rows[0]?.sequence ?? 1
+    return { id, sequence }
+  })
 }
 
 export async function getTranscriptTextForInterview(
@@ -200,22 +198,23 @@ export async function insertInterviewMessage(params: {
   const { interviewId, userId, role, messageType, text } = params
   const id = randomUUID()
 
-  const sequence = await getNextSequenceForInterview(
-    interviewId,
-    "interview_messages"
-  )
-
-  await withClient(async (client) => {
-    await client.query(
+  return withClient(async (client) => {
+    const result = await client.query<{ sequence: number }>(
       `
       INSERT INTO interview_messages (id, interview_id, user_id, role, message_type, sequence, text)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES (
+        $1, $2, $3, $4, $5,
+        (SELECT COALESCE(MAX(sequence), 0) + 1 FROM interview_messages WHERE interview_id = $2),
+        $6
+      )
+      RETURNING sequence
       `,
-      [id, interviewId, userId, role, messageType, sequence, text]
+      [id, interviewId, userId, role, messageType, text]
     )
-  })
 
-  return { id, sequence }
+    const sequence = result.rows[0]?.sequence ?? 1
+    return { id, sequence }
+  })
 }
 
 export type InterviewMessageRecord = {

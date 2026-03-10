@@ -12,12 +12,22 @@ function getAdminApp(): admin.app.App {
   if (key) {
     try {
       const cert = JSON.parse(key) as admin.ServiceAccount
-      console.log("Firebase Admin projectId:", cert.project_id)
       return admin.initializeApp({ credential: admin.credential.cert(cert) })
     } catch (e) {
       console.error("Invalid FIREBASE_SERVICE_ACCOUNT_KEY:", e)
       throw new Error("Firebase Admin: invalid FIREBASE_SERVICE_ACCOUNT_KEY")
     }
+  }
+
+  // Fall back to application default credentials (e.g. GOOGLE_APPLICATION_CREDENTIALS)
+  // which is common in hosted environments.
+  try {
+    return admin.initializeApp()
+  } catch (e) {
+    console.error("Firebase Admin init failed:", e)
+    throw new Error(
+      "Firebase Admin: missing FIREBASE_SERVICE_ACCOUNT_KEY and no application default credentials available."
+    )
   }
 }
 
